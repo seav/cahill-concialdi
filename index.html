@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Cahill–Concialdi Projection</title>
+</head>
+<style>
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+}
+
+#map {
+  transform: rotate(-5.4deg);
+}
+
+#background {
+  fill: #123;
+  stroke: none;
+}
+
+#graticule {
+  fill: none;
+  stroke-width: 0.15;
+  stroke: #246;
+}
+
+#circles {
+  fill: none;
+  stroke-width: 0.3;
+  stroke: #357;
+}
+
+.polar-tropic {
+  stroke-dasharray: 1 1;
+}
+
+#countries {
+  stroke-width: 0.05;
+}
+
+#countries path:hover {
+  fill: #ff8;
+}
+
+#boundaries {
+  fill: none;
+  stroke-width: 0.1;
+  stroke: #234;
+}
+
+#boundaries path.disputed {
+  stroke-dasharray: 0.5 0.2;
+}
+
+</style>
+<body>
+
+<svg viewBox="-142 -45.5 302 178">
+  <g id="map">
+    <path id="background" />
+    <g id="graticule"></g>
+    <g id="circles"></g>
+    <g id="countries"></g>
+    <g id="boundaries"></g>
+  </g>
+</svg>
+
+<script src="complex.min.js"></script>
+<script src="ne-boundaries.js"></script>
+<script src="ne-country-areas.js"></script>
+<script>
+'use strict';
+
+// ==================================================================
+// BASIC CONSTANTS AND FUNCTIONS
+// ------------------------------------------------------------------
+
+// SVG XML namespace
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Math constants
+const HALF_ROOT_3 = Math.sqrt(3)/2;
+const HALF_PI     = Math.PI/2;
+const QUARTER_PI  = Math.PI/4;
+const COS_30      = Math.cos(Math.PI/6);
+
+// Tilt of the earth's poles in degrees; used to draw the tropic and polar circles
+const EARTH_TILT = 23.43;
+
+// Scaling factor used for the SVG;
+// equivalent to the side length of a projected octant in SVG units
+const SVG_SCALE = 100;
+
+// ------------------------------------------------------------------
+
+// returns radians given degrees
+const deg2Rad = θ => θ*Math.PI/180;
+
+// DOM function aliases
+const fGID   = id   => document.getElementById(id);
+const fCSVGE = name => document.createElementNS(SVG_NS, name);
+
+
+// ==================================================================
+// PRIMITIVE DATA TYPE CLASSES
+// ------------------------------------------------------------------
+
+// Class to represents a 2D point, intended for the SVG canvas
+class Point {
+
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+
+  // Returns an SVG-friendly string representation of the point and
+  // rounded to at most 1 decimal point
+  toString() {
+    return (`${this.x.toFixed(1)},${this.y.toFixed(1)}`).replace(/\.0/g, '');
+  }
+}
+
+// ------------------------------------------------------------------
+
+// Class to represent a pair of coordinates on Earth
+class LatLon {
+
+  constructor(lat, lon) {
+    this.lat = lat;
+    this.lon = lon;
+  }
+
+  copy() {
+    return new LatLon(this.lat, this.lon);
+  }
+
+  // Assuming object is in degrees, returns a new object in radians
+  toRadians() {
+    return new LatLon(deg2Rad(this.lat), deg2Rad(this.lon));
+  }
+};
+
+// ------------------------------------------------------------------
+
+// Class to represent a pole; basically a LatLon object
+// with an additional orientation angle
+class Pole {
+
+  constructor(lat, lon, θ) {
+    this.lat = lat;
+    this.lon = lon;
+    this.θ   = θ;
+  }
+
+  isEqual(otherPole) {
+    return (
+      this.lat === otherPole.lat &&
+      this.lon === otherPole.lon &&
+      this.θ   === otherPole.θ
+    );
+  }
+}
+
+
+// ==================================================================
+// MAP LAYERS DRAWING ROUTINES
+// ------------------------------------------------------------------
+
+// Convert GeoJSON LineString or MultiPolygon coordinates to an SVG path
+function convertGeoJsonToSvgPath(geoJson, isMultiPolygon) {
+  let path = fCSVGE('path');
+  let lineStrings = isMultiPolygon ? [].concat(...geoJson) : [geoJson];
+  path.setAttribute(
+    'd',
+    lineStrings
+      .map(lineString =>
+        lineString
+          .map((lonLat, idx) =>
+            (idx === 0 ? 'M' : 'L') +
+            project(new LatLon(...[...lonLat].reverse())).toString()
+          )
+          .join('') + (isMultiPolygon ? 'z' : '')
+      )
+      .join(''),
+  );
+  return path;
+}
+
+// ------------------------------------------------------------------
+
+// Convert a list of list of Point objects to an SVG path
+function convertPointListsToSvgPath(pointLists, isClosed) {
+  let path = fCSVGE('path');
+  path.setAttribute(
+    'd',
+    pointLists
+      .map(list =>
+        list.map((point, idx) => (idx === 0 ? 'M' : 'L') + point.toString()).join('') +
+        (isClosed ? 'z' : '')
+      )
+      .join(''),
+  );
+  return path;
+}
+
+// ------------------------------------------------------------------
+
+function drawCountries() {
+  COUNTRY_AREAS.forEach(country => {
+
+    let path = convertGeoJsonToSvgPath(country[1], true);
+
+    // Compute fill color based on the country's position
+    // where the average of the country's coordinates is a proxy for position
+    let flatLonLatList = [].concat(...[].concat(...country[1]));
+    let numCoords = flatLonLatList.length;
+    let sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
+    let sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
+    let red   = 128 + 128*sumLat/numCoords/90;
+    let green = 128 + 128*sumLon/numCoords/180;
+    let blue  = 255 - (red + green)/2;
+    red   = Math.min(255, red  *1.25);
+    green = Math.min(255, green*1.25);
+    blue  = Math.min(255, blue *1.25);
+    let rgb = `rgb(${red},${green},${blue})`;
+    path.setAttribute('fill'  , rgb);
+    path.setAttribute('stroke', rgb);
+
+    fGID('countries').appendChild(path);
+  });
+}
+
+// ------------------------------------------------------------------
+
+function drawBoundaries() {
+  BOUNDARIES.forEach(boundary => {
+    let path = convertGeoJsonToSvgPath(boundary[1], false);
+    if (!boundary[0]) path.classList.add('disputed');
+    fGID('boundaries').appendChild(path);
+  });
+}
+
+// ------------------------------------------------------------------
+
+// Graticule interval values in degrees
+const DEFAULT_INTERVAL = 15;
+const VALID_INTERVALS = [1, 2, 5, 10, 15, 20, 30];
+
+function drawGraticule(interval = DEFAULT_INTERVAL) {
+
+  if (!VALID_INTERVALS.includes(interval)) interval = DEFAULT_INTERVAL;
+
+  let pointLists = [];
+  MAP_AREAS.forEach((area, idx) => {
+
+    let points;
+
+    let endLon = area.neCorner.lon;
+    if (area.hasAntimeridian) endLon += 360;
+
+    // Generate latitude lines
+    for (
+      let lat = Math.ceil (area.swCorner.lat/interval)*interval;
+      lat <=    Math.floor(area.neCorner.lat/interval)*interval;
+      lat += interval
+    ) {
+      points = [];
+      for (let lon = area.swCorner.lon; lon <= endLon; lon++) {
+        points.push(project(new LatLon(lat, lon), idx));
+      }
+      if (area.swCorner.lon % 1 !== endLon % 1) {
+        // Account for the half-degree cut in MapArea 2 and 3
+        points.push(project(new LatLon(lat, endLon), idx));
+      }
+      pointLists.push(points);
+    }
+
+    // Generate longitude lines
+    for (
+      let lon = Math.ceil (area.swCorner.lon/interval)*interval;
+      lon <=    Math.floor(endLon           /interval)*interval;
+      lon += interval
+    ) {
+      points = [];
+      for (let lat = area.swCorner.lat; lat <= area.neCorner.lat; lat++) {
+        points.push(project(new LatLon(lat, lon), idx));
+      }
+      pointLists.push(points);
+    }
+  });
+
+  // Draw graticule
+  let path = convertPointListsToSvgPath(pointLists, false);
+  fGID('graticule').appendChild(path);
+}
+
+// ------------------------------------------------------------------
+
+// Draws the equator, tropic circles, and polar circles
+function drawSpecialCircles() {
+
+  let pointLists = [];
+  let points;
+
+  // Generate equator
+  pointLists = [];
+  points = [];
+  points.push(project(MAP_AREAS[3].swCorner, 3));
+  points.push(project(MAP_AREAS[4].swCorner));
+  points.push(project(MAP_AREAS[0].swCorner));
+  points.push(project(MAP_AREAS[1].swCorner));
+  points.push(project(MAP_AREAS[2].swCorner));
+  points.push(project(MAP_AREAS[3].swCorner));
+  pointLists.push(points);
+  points = [];
+  points.push(project(MAP_AREAS[4].swCorner));
+  points.push(project(MAP_AREAS[9].neCorner, 10));
+  pointLists.push(points);
+  points = [];
+  points.push(project(MAP_AREAS[2].swCorner));
+  points.push(project(MAP_AREAS[9].neCorner, 9));
+  pointLists.push(points);
+
+  // Draw equator
+  let path = convertPointListsToSvgPath(pointLists, false);
+  path.classList.add('equator');
+  fGID('circles').appendChild(path);
+
+  // Generate Tropic of Cancer and Arctic Circle
+  [EARTH_TILT, 90 - EARTH_TILT].forEach(lat => {
+    points = [project(new LatLon(lat, MAP_AREAS[3].swCorner.lon), 3)];
+    for (let lon = Math.trunc(MAP_AREAS[3].swCorner.lon); lon < MAP_AREAS[2].neCorner.lon + 360; lon++) {
+      points.push(project(new LatLon(lat, lon)));
+    }
+    points.push(project(new LatLon(lat, MAP_AREAS[2].neCorner.lon)));
+    pointLists.push(points);
+  });
+
+  // Generate Tropic of Capricorn
+  points = [];
+  for (let lon = MAP_AREAS[10].swCorner.lon; lon <= MAP_AREAS[11].neCorner.lon; lon++) {
+    points.push(project(new LatLon(-EARTH_TILT, lon), lon < MAP_AREAS[10].neCorner.lon ? 10 : 11));
+  }
+  pointLists.push(points);
+  points = [];
+  for (let lon = MAP_AREAS[5].swCorner.lon; lon <= MAP_AREAS[5].neCorner.lon; lon++) {
+    points.push(project(new LatLon(-EARTH_TILT, lon)));
+  }
+  pointLists.push(points);
+  points = [];
+  for (let lon = MAP_AREAS[8].swCorner.lon; lon <= MAP_AREAS[9].neCorner.lon + 360; lon++) {
+    points.push(project(new LatLon(-EARTH_TILT, lon), points.length === 0 ? 8 : undefined));
+  }
+  pointLists.push(points);
+
+  // Generate Antarctic Circle
+  points = [];
+  for (let lon = MAP_AREAS[10].swCorner.lon; lon <= MAP_AREAS[6].neCorner.lon; lon++) {
+    points.push(project(new LatLon(-90 + EARTH_TILT, lon), points.length === 0 ? 10 : undefined));
+  }
+  pointLists.push(points);
+  points = [];
+  for (let lon = MAP_AREAS[7].swCorner.lon; lon <= MAP_AREAS[9].neCorner.lon + 360; lon++) {
+    points.push(project(new LatLon(-90 + EARTH_TILT, lon), points.length === 0 ? 7 : undefined));
+  }
+  pointLists.push(points);
+
+  // Draw tropic and polar circles
+  path = convertPointListsToSvgPath(pointLists, false);
+  path.classList.add('polar-tropic');
+  fGID('circles').appendChild(path);
+}
+
+// ------------------------------------------------------------------
+
+// Draw the map background/outline
+function drawBackground() {
+
+  // Generate background points
+  let points = [];
+  points.push(project(new LatLon(MAP_AREAS[10].neCorner.lat, MAP_AREAS[10].swCorner.lon), 10));
+  for (let lat = 0; lat >= -90; lat--) {
+    points.push(project(new LatLon(lat, MAP_AREAS[10].swCorner.lon), 10));
+  }
+  for (let lon = MAP_AREAS[6].neCorner.lon; lon >= MAP_AREAS[6].swCorner.lon; lon--) {
+    points.push(project(new LatLon(MAP_AREAS[6].neCorner.lat, lon), 6));
+  }
+  points.push(project(MAP_AREAS[11].neCorner, 11));
+  for (let lon = MAP_AREAS[5].swCorner.lon; lon <= MAP_AREAS[5].neCorner.lon; lon++) {
+    points.push(project(new LatLon(MAP_AREAS[5].swCorner.lat, lon)));
+  }
+  points.push(project(MAP_AREAS[5].neCorner));
+  for (let lon = MAP_AREAS[7].neCorner.lon; lon >= MAP_AREAS[7].swCorner.lon; lon--) {
+    points.push(project(new LatLon(MAP_AREAS[7].neCorner.lat, lon), 7));
+  }
+  for (let lat = -90; lat <= 0; lat++) {
+    points.push(project(new LatLon(lat, MAP_AREAS[9].neCorner.lon), 9));
+  }
+  points.push(project(MAP_AREAS[8].neCorner));
+  for (let lat = 0; lat < 90; lat++) {
+    points.push(project(new LatLon(lat, MAP_AREAS[2].neCorner.lon)));
+  }
+  for (let lat = 90; lat >= 0; lat--) {
+    points.push(project(new LatLon(lat, MAP_AREAS[3].swCorner.lon), 3) );
+  }
+  points.push(project(MAP_AREAS[10].neCorner));
+
+  // Draw background
+  fGID('background').setAttribute(
+    'd',
+    points.map((point, idx) => (idx === 0 ? 'M' : 'L') + point.toString()).join(''),
+  );
+}
+
+
+// ==================================================================
+// MAP PROJECTION CODE
+// ------------------------------------------------------------------
+
+// 2^(2/3)/6 integral_0^π sin^(-1/3)(x)dx
+const HEXAGON_SCALE = 1.1129126745;
+
+// Pole object representing the standard north pole
+const NORTH_POLE = new Pole(HALF_PI, 0, 0);
+
+// Pole object representing a pole on the equator at the east vertex of an octant
+const VERTEX = new Pole(0, QUARTER_PI, -3 * QUARTER_PI);
+
+// ------------------------------------------------------------------
+
+// Class to represents a map area
+// (either the whole or a portion of an octant / octahedral face)
+class MapArea {
+
+  constructor(centerLon, swCorner, neCorner, origin, angle) {
+
+    // Longitude of the octant's center in degrees
+    this.centerLon = centerLon;
+
+    // LatLon objects representing the SW and NE corners of the map area
+    this.swCorner = swCorner;
+    this.neCorner = neCorner;
+
+    // Indicates if the octant is in the northern hemisphere
+    this.isNorth = neCorner.lat > 0;
+
+    // Point object representing the position of the projected N or S pole
+    this.origin = origin;
+
+    // Angle in radians representing the direction of S for the N pole or N for the S pole
+    // 0° points down and positive degrees runs clockwise
+    // Note: constructor param must be in degrees
+    this.angle = deg2Rad(angle);
+
+    // Indicates if the map area contains the antimeridian (180°)
+    this.hasAntimeridian = swCorner.lon > neCorner.lon;
+  }
+
+  // Returns true if the specified LatLon object is inside the map area
+  // Note: Assumes that the param is within the Earth (lat: [-90°,90°]; lon: [-180°,180°])
+  contains(latLon) {
+    return (
+      this.swCorner.lat <= latLon.lat && latLon.lat <= this.neCorner.lat &&
+      (
+        this.hasAntimeridian
+          ? (this.swCorner.lon <= latLon.lon || latLon.lon <= this.neCorner.lon)
+          : (this.swCorner.lon <= latLon.lon && latLon.lon <= this.neCorner.lon)
+      )
+    );
+  }
+
+  // Given a LatLon object in degrees, returns a Point object representing the
+  // projection to the map based on this map area's attributes
+  project(latLon) {
+    let normalLatLon = this._getNormalizedOctantLatLon(latLon);
+    let point = projectInOctant(normalLatLon.toRadians());
+    if (!this.isNorth) point.x = -point.x;
+    return new Point(
+      SVG_SCALE*(this.origin.x + point.x*Math.cos(this.angle) - point.y*Math.sin(this.angle)),
+      SVG_SCALE*(this.origin.y + point.x*Math.sin(this.angle) + point.y*Math.cos(this.angle)),
+    );
+  }
+
+  // Given a LatLon object in degrees, returns the normalized coordinates as a
+  // new LatLon object in degrees where:
+  // - latitude is the distance from the equator (regardless if N/S)
+  // - longitude is the difference from the octant's center longitude (+ goes east)
+  _getNormalizedOctantLatLon(latLon) {
+    return new LatLon(
+      Math.abs(latLon.lat),
+      this.hasAntimeridian
+        ? (
+          (latLon.lon     < 0 ? latLon.lon     + 360 : latLon.lon    ) -
+          (this.centerLon < 0 ? this.centerLon + 360 : this.centerLon)
+        )
+        : latLon.lon - this.centerLon,
+    );
+  }
+}
+
+// Constants for the origin field of the MapArea class
+const NORTH_POLE_ORIGIN   = new Point(0, 0);
+const SOUTH_POLE_B_ORIGIN = new Point(   0, 2*COS_30);
+const SOUTH_POLE_L_ORIGIN = new Point(-1.5,   COS_30);
+const SOUTH_POLE_R_ORIGIN = new Point( 1.5,   COS_30);
+
+// List of the 12 MapArea objects
+const MAP_AREAS = [
+  [  20, new LatLon(  0,  -25  ), new LatLon( 90,   65  ), NORTH_POLE_ORIGIN  ,    0],
+  [ 110, new LatLon(  0,   65  ), new LatLon( 90,  155  ), NORTH_POLE_ORIGIN  ,  -60],
+  [-160, new LatLon(  0,  155  ), new LatLon( 90, -168.5), NORTH_POLE_ORIGIN  , -120],
+  [-160, new LatLon(  0, -168.5), new LatLon( 90, -115  ), NORTH_POLE_ORIGIN  ,  120],
+  [ -70, new LatLon(  0, -115  ), new LatLon( 90,  -25  ), NORTH_POLE_ORIGIN  ,   60],
+  [  20, new LatLon(-45,  -25  ), new LatLon(  0,   65  ), SOUTH_POLE_B_ORIGIN, -180],
+  [  20, new LatLon(-90,  -25  ), new LatLon(-45,   15  ), SOUTH_POLE_L_ORIGIN,  -60],
+  [  20, new LatLon(-90,   15  ), new LatLon(-45,   65  ), SOUTH_POLE_R_ORIGIN,   60],
+  [ 110, new LatLon(-90,   65  ), new LatLon(  0,  155  ), SOUTH_POLE_R_ORIGIN,  120],
+  [-160, new LatLon(-90,  155  ), new LatLon(  0, -150  ), SOUTH_POLE_R_ORIGIN,  180],
+  [-160, new LatLon(-90, -150  ), new LatLon(  0, -115  ), SOUTH_POLE_L_ORIGIN,  180],
+  [ -70, new LatLon(-90, -115  ), new LatLon(  0,  -25  ), SOUTH_POLE_L_ORIGIN, -120],
+].map(params => new MapArea(...params));
+
+// ------------------------------------------------------------------
+
+// The entry function to project a LatLon object in degrees to its map position
+// as a Point object.
+// If the areaIdx param is specified, it will coerce projection on that MapArea,
+// otherwise it will select the first MapArea that contains the LatLon object.
+// The areaIdx param is needed because the edges of the MapAreas overlap and may
+// project to different places on the map if the MapAreas aren't adjacent.
+function project(latLon, areaIdx) {
+  let area = areaIdx ? MAP_AREAS[areaIdx] : MAP_AREAS.find(area => area.contains(latLon));
+  return area.project(latLon);
+}
+
+// ------------------------------------------------------------------
+
+// This takes a LatLon object in radians and returns the normalized projected
+// map position as a Point object.
+//
+// This function is an adaptation of faceProject() in jkunimune15/Map-Projections:
+// https://github.com/jkunimune15/Map-Projections/blob/
+//   f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L123-L139
+function projectInOctant(latLon) {
+
+  // Temporarily negate negative longitudes to take advantage of octant symmetry
+  let negate = latLon.lon < 0 ? -1 : 1;
+  latLon.lon = negate * latLon.lon;
+
+  // Get coordinates of latLon as seen from the VERTEX pole
+  let oblique = mapObliqueLatLon(latLon, VERTEX);
+
+  // Select original latLon or oblique latLon depending on which is closer
+  // to the north or VERTEX poles
+  let latLonPrime = latLon.lat > oblique.lat ? latLon : oblique;
+
+  // Apply the conformal projection
+  let w = new Complex({
+    r   : Math.pow(Math.tan(QUARTER_PI - latLonPrime.lat/2), 2/3),
+    phi : latLonPrime.lon * 2/3,
+  });
+  let z = projectConformal(w);
+
+  // Return the projected point, taking care to reverse the temporary negation
+  return (
+    latLon.lat > oblique.lat
+      ? new Point(negate*z.im, z.re)
+      : new Point(
+        negate*(-HALF_ROOT_3*z.re - z.im/2 + 1/2),
+        -z.re/2 + HALF_ROOT_3*z.im + HALF_ROOT_3,
+      )
+  );
+}
+
+// ------------------------------------------------------------------
+
+// This is an approximation of the conformal Cahill projection math.
+//
+// This function is an adaptation of polynomial() in jkunimune15/Map-Projections:
+// https://github.com/jkunimune15/Map-Projections/blob/
+//   f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L162-L167
+function projectConformal(c) {
+  let c1 = c.mul(new Complex({ r: 1, phi: -Math.PI/6 }));
+  let c2 = c1
+    .add(c1.pow(7 ).div(21     ))
+    .add(c1.pow(11).div(99     ))
+    .add(c1.pow(13).div(1287/16));
+  return c2.div(new Complex({ r: HEXAGON_SCALE, phi: -Math.PI/6 }));
+}
+
+// ------------------------------------------------------------------
+
+// Compute the relative latitude and longitude of a given LatLon object in radians
+// given a specified pole; returns a new LatLon object in radians.
+//
+// This function is an adaptation of obliquifySphc() in jkunimune15/Map-Projections:
+// https://github.com/jkunimune15/Map-Projections/blob/
+//   1d5a4d97b9e63ef614c133c9e028ba8e44702c10/src/maps/Projection.java#L400-L441
+function mapObliqueLatLon(latLon, pole) {
+
+  if (pole.isEqual(NORTH_POLE)) return latLon.copy();
+
+  let lat1 = (pole.lat === HALF_PI)
+    ? latLon.lat
+    : Math.asin(
+        Math.sin(pole.lat)*Math.sin(latLon.lat) +
+        Math.cos(pole.lat)*Math.cos(latLon.lat)*Math.cos(pole.lon - latLon.lon));
+
+  let lon1 = (pole.lat === HALF_PI)
+    ? lon1 = latLon.lon - pole.lon
+    : Math.acos(
+        (
+          Math.cos(pole.lat)*Math.sin(latLon.lat) -
+          Math.sin(pole.lat)*Math.cos(latLon.lat)*Math.cos(pole.lon - latLon.lon)
+        )/Math.cos(lat1)
+      ) - Math.PI;
+  if (isNaN(lon1)) {
+    lon1 = (
+      (Math.cos(pole.lon - latLon.lon) >= 0 && latLon.lat <  pole.lat) ||
+      (Math.cos(pole.lon - latLon.lon) <  0 && latLon.lat < -pole.lat)
+    ) ? 0 : -Math.PI;
+  }
+  else if (Math.sin(latLon.lon - pole.lon) > 0) {
+    lon1 = -lon1;
+  }
+  lon1 -= pole.θ;
+  while (lon1 >  Math.PI) lon1 -= 2*Math.PI;
+  while (lon1 < -Math.PI) lon1 += 2*Math.PI;
+
+  return new LatLon(lat1, lon1);
+}
+
+
+// ==================================================================
+// RUN THE APP
+// ------------------------------------------------------------------
+
+drawBackground();
+drawGraticule(10);
+drawSpecialCircles();
+drawCountries();
+drawBoundaries();
+
+</script>
+</body>
+</html>
