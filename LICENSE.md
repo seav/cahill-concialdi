@@ -1,5 +1,5 @@
 # MIT License
-Except for the files indicate below under “Other licenses”, all of the source code is licensed under the [MIT License](https://opensource.org/licenses/MIT).
+Except for the files listed below under “Other licenses”, all of the source code is released under the [MIT License](https://opensource.org/licenses/MIT).
 
 > Copyright © 2020, Sector4F / Eugene Alvin Villar
 >
