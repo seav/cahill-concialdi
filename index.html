@@ -12,10 +12,6 @@ html, body {
   background: #000;
 }
 
-#map {
-  transform: rotate(-5.4deg);
-}
-
 #background {
   fill: #123;
   stroke: none;
@@ -61,7 +57,7 @@ html, body {
 </style>
 <body>
 
-<svg viewBox="-142 -45.5 302 178">
+<svg>
   <g id="map">
     <path id="background" />
     <g id="graticule"></g>
@@ -76,36 +72,6 @@ html, body {
 <script src="ne-country-areas.js"></script>
 <script>
 'use strict';
-
-// ==================================================================
-// BASIC CONSTANTS AND FUNCTIONS
-// ------------------------------------------------------------------
-
-// SVG XML namespace
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-// Math constants
-const HALF_ROOT_3 = Math.sqrt(3)/2;
-const HALF_PI     = Math.PI/2;
-const QUARTER_PI  = Math.PI/4;
-const COS_30      = Math.cos(Math.PI/6);
-
-// Tilt of the earth's poles in degrees; used to draw the tropic and polar circles
-const EARTH_TILT = 23.43;
-
-// Scaling factor used for the SVG;
-// equivalent to the side length of a projected octant in SVG units
-const SVG_SCALE = 100;
-
-// ------------------------------------------------------------------
-
-// returns radians given degrees
-const deg2Rad = θ => θ*Math.PI/180;
-
-// DOM function aliases
-const fGID   = id   => document.getElementById(id);
-const fCSVGE = name => document.createElementNS(SVG_NS, name);
-
 
 // ==================================================================
 // PRIMITIVE DATA TYPE CLASSES
@@ -169,7 +135,48 @@ class Pole {
 
 
 // ==================================================================
+// BASIC CONSTANTS AND FUNCTIONS
+// ------------------------------------------------------------------
+
+// SVG XML namespace
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Math constants
+const HALF_ROOT_3 = Math.sqrt(3)/2;
+const HALF_PI     = Math.PI/2;
+const QUARTER_PI  = Math.PI/4;
+const COS_30      = Math.cos(Math.PI/6);
+
+// Tilt of the earth's poles in degrees; used to draw the tropic and polar circles
+const EARTH_TILT = 23.43;
+
+// Map area parameters
+const MAP_SCALE       = 100;  // equivalent to the side length of a projected octant in SVG units or Canvas pixels
+const MAP_VIEW_ORIGIN = new Point(142, 45.5);
+const MAP_WIDTH       = 302;
+const MAP_HEIGHT      = 178;
+const MAP_TILT        = -5.4;  // in degrees
+
+// ------------------------------------------------------------------
+
+// returns radians given degrees
+const deg2Rad = θ => θ*Math.PI/180;
+
+// DOM function aliases
+const fGID   = id       => document.getElementById(id);
+const fQS    = selector => document.querySelector(selector);
+const fCSVGE = name     => document.createElementNS(SVG_NS, name);
+
+
+// ==================================================================
 // MAP LAYERS DRAWING ROUTINES
+// ------------------------------------------------------------------
+
+function initSvg() {
+  fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
+  fGID('map').setAttribute('transform', `rotate(${MAP_TILT})`);
+}
+
 // ------------------------------------------------------------------
 
 // Convert GeoJSON LineString or MultiPolygon coordinates to an SVG path
@@ -482,8 +489,8 @@ class MapArea {
     let point = projectInOctant(normalLatLon.toRadians());
     if (!this.isNorth) point.x = -point.x;
     return new Point(
-      SVG_SCALE*(this.origin.x + point.x*Math.cos(this.angle) - point.y*Math.sin(this.angle)),
-      SVG_SCALE*(this.origin.y + point.x*Math.sin(this.angle) + point.y*Math.cos(this.angle)),
+      MAP_SCALE*(this.origin.x + point.x*Math.cos(this.angle) - point.y*Math.sin(this.angle)),
+      MAP_SCALE*(this.origin.y + point.x*Math.sin(this.angle) + point.y*Math.cos(this.angle)),
     );
   }
 
@@ -641,6 +648,7 @@ function mapObliqueLatLon(latLon, pole) {
 // RUN THE APP
 // ------------------------------------------------------------------
 
+initSvg();
 drawBackground();
 drawGraticule(10);
 drawSpecialCircles();
