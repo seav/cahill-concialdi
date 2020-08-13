@@ -12,6 +12,11 @@ html, body {
   background: #000;
 }
 
+svg, canvas {
+  position: absolute;
+  width: 100vw;
+}
+
 #background {
   fill: #123;
   stroke: none;
@@ -57,6 +62,7 @@ html, body {
 </style>
 <body>
 
+<canvas></canvas>
 <svg>
   <g id="map">
     <path id="background" />
@@ -138,6 +144,16 @@ class Pole {
 // BASIC CONSTANTS AND FUNCTIONS
 // ------------------------------------------------------------------
 
+// returns radians given degrees
+const deg2Rad = θ => θ*Math.PI/180;
+
+// DOM function aliases
+const fGID   = id       => document.getElementById(id);
+const fQS    = selector => document.querySelector(selector);
+const fCSVGE = name     => document.createElementNS(SVG_NS, name);
+
+// ------------------------------------------------------------------
+
 // SVG XML namespace
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -156,25 +172,22 @@ const MAP_VIEW_ORIGIN = new Point(142, 45.5);
 const MAP_WIDTH       = 302;
 const MAP_HEIGHT      = 178;
 const MAP_TILT        = -5.4;  // in degrees
-
-// ------------------------------------------------------------------
-
-// returns radians given degrees
-const deg2Rad = θ => θ*Math.PI/180;
-
-// DOM function aliases
-const fGID   = id       => document.getElementById(id);
-const fQS    = selector => document.querySelector(selector);
-const fCSVGE = name     => document.createElementNS(SVG_NS, name);
-
+const MAP_TILT_RAD    = deg2Rad(MAP_TILT);
 
 // ==================================================================
-// MAP LAYERS DRAWING ROUTINES
+// VECTOR MAP LAYERS DRAWING ROUTINES
 // ------------------------------------------------------------------
 
-function initSvg() {
+function initVectorMap() {
+
   fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
   fGID('map').setAttribute('transform', `rotate(${MAP_TILT})`);
+
+  drawBackground();
+  drawGraticule(10);
+  drawSpecialCircles();
+  drawCountries();
+  drawBoundaries();
 }
 
 // ------------------------------------------------------------------
@@ -645,15 +658,196 @@ function mapObliqueLatLon(latLon, pole) {
 
 
 // ==================================================================
+// RASTER MAP DRAWING ROUTINES
+// ------------------------------------------------------------------
+
+const NASA_BLUE_FILENAME  = 'nasa-blue-marble-ng.jpg';
+const NASA_BLACK_FILENAME = 'nasa-black-marble.jpg';
+const NE_I_FILENAME       = 'ne-i.jpg';
+const NE_HYPSO_FILENAME   = 'ne-hypso.jpg';
+
+// ------------------------------------------------------------------
+
+var Canvas;            // Canvas HTML element
+var CanvasCtx;         // Canvas rendering context
+var CanvasData;        // Canvas image data
+var RasterPpu;         // Ratio of canvas display pixels per SVG unit
+var SourceRasterPpd;   // Source map's pixels per degree measure; must be an integer
+var SourceRasterData;  // Source map's raw image data
+
+// ------------------------------------------------------------------
+
+function initRasterMap(filename) {
+
+  Canvas = fQS('canvas');
+  Canvas.width = Canvas.clientWidth;
+  RasterPpu = Canvas.clientWidth / MAP_WIDTH;
+  Canvas.height = RasterPpu * MAP_HEIGHT;
+  CanvasCtx = Canvas.getContext('2d');
+  CanvasData = CanvasCtx.getImageData(0, 0, Canvas.width, Canvas.height);
+
+  const sourceImage = new Image();
+  sourceImage.src = filename;
+  sourceImage.onload = function() {
+
+    SourceRasterPpd = sourceImage.width / 360;
+    const sourceCanvas = document.createElement('canvas');
+    sourceCanvas.width = sourceImage.width;
+    sourceCanvas.height = sourceImage.height;
+    const sourceCtx = sourceCanvas.getContext('2d')
+    sourceCtx.drawImage(sourceImage, 0, 0);
+    SourceRasterData = sourceCtx.getImageData(0, 0, sourceImage.width, sourceImage.height).data;
+
+    MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
+  };
+}
+
+// ------------------------------------------------------------------
+
+function drawRasterMapArea(area, idx) {
+  for (let lat = area.swCorner.lat; lat < area.neCorner.lat; lat++) {
+    let endLon = Math.ceil(area.neCorner.lon);
+    if (area.hasAntimeridian) endLon += 360;
+    for (let lon = Math.floor(area.swCorner.lon); lon < endLon; lon++) {
+      const clampedLon0 = Math.max(lon    , area.swCorner.lon);
+      const clampedLon1 = Math.min(lon + 1, endLon);
+      const cell =
+        [
+          [lat    , clampedLon0],
+          [lat    , clampedLon1],
+          [lat + 1, clampedLon1],
+          [lat + 1, clampedLon0],
+        ]
+        .map(coords => project(new LatLon(...coords), idx))
+        .map(point => new Point(
+          (point.x*Math.cos(MAP_TILT_RAD) - point.y*Math.sin(MAP_TILT_RAD) + MAP_VIEW_ORIGIN.x)*RasterPpu,
+          (point.x*Math.sin(MAP_TILT_RAD) + point.y*Math.cos(MAP_TILT_RAD) + MAP_VIEW_ORIGIN.y)*RasterPpu,
+        ));
+      drawCell(cell, new LatLon(lat, lon));
+    }
+  }
+  CanvasCtx.putImageData(CanvasData, 0, 0);
+}
+
+// ------------------------------------------------------------------
+
+function drawCell(cell, latLon) {
+
+  const xs = cell.map(point => point.x);
+  const ys = cell.map(point => point.y);
+  const minX = Math.floor(Math.min(...xs));
+  const maxX = Math.ceil (Math.max(...xs));
+  const minY = Math.floor(Math.min(...ys));
+  const maxY = Math.ceil (Math.max(...ys));
+
+  for   (let x = minX; x < maxX; x++) {
+    for (let y = minY; y < maxY; y++) {
+      const pixelPos = new Point(x, y);
+      if (isInCell(pixelPos, cell)) {
+        const pos = getCellPos(pixelPos, cell);
+        const srcIdx  = 4*(
+          Math.floor(SourceRasterPpd * (90 - latLon.lat - pos.y))*360*SourceRasterPpd +
+          Math.floor(SourceRasterPpd * ((latLon.lon + 180)%360 + pos.x))
+        );
+        const destIdx = 4*(x + y*Canvas.width);
+        CanvasData.data[destIdx    ] = SourceRasterData[srcIdx    ];
+        CanvasData.data[destIdx + 1] = SourceRasterData[srcIdx + 1];
+        CanvasData.data[destIdx + 2] = SourceRasterData[srcIdx + 2];
+        CanvasData.data[destIdx + 3] = 255;
+      }
+    }
+  }
+}
+
+// ------------------------------------------------------------------
+
+function isInCell(point, cell) {
+  let numIntersections = 0;
+  for (let idx = 0; idx < cell.length; idx++) {
+    const edgePointA = cell[idx];
+    const edgePointB = cell[(idx + 1) % cell.length];
+    if (
+      point.x >= Math.min(edgePointA.x, edgePointB.x) &&
+      point.x <  Math.max(edgePointA.x, edgePointB.x)
+    ) {
+      if (
+        point.y >= Math.max(edgePointA.y, edgePointB.y) ||
+        point.y >= Math.min(edgePointA.y, edgePointB.y) &&
+        point.y >= edgePointA.y + (point.x - edgePointA.x) / (edgePointB.x - edgePointA.x) * (edgePointB.y - edgePointA.y)
+      ) numIntersections++;
+    }
+  }
+  return numIntersections % 2 === 1;
+}
+
+// ------------------------------------------------------------------
+
+function getCellPos(point, cell) {
+
+  // Cell with vertices (A,B), (C,D), (G,H), (E,F) counterclockwise
+  //
+  // System of equations determining the projected position into a cell:
+  //   1. x₀ = A + (C - A)x
+  //      y₀ = B + (D - B)x
+  //      x₁ = E + (G - E)x
+  //      y₁ = F + (H - F)x
+  //   2. x′ = x₀ + (x₁ - x₀)y
+  //      y′ = y₀ + (y₁ - y₀)y
+  //
+  // Combined system:
+  //   x′ - A = (C - A)x + (E - A)y + (A + G - C - E)xy
+  //   y′ - B = (D - B)x + (F - B)y + (B + H - D - F)xy
+  //
+  // Helper coefficients:
+  //   J = x' - A
+  //   K = y' - B
+  //   L = C - A
+  //   M = D - B
+  //   N = E - A
+  //   P = F - B
+  //   Q = G + A - E - C
+  //   R = H + B - F - D
+
+  const J = point.x - cell[0].x;
+  const K = point.y - cell[0].y;
+  const L = cell[1].x - cell[0].x;
+  const M = cell[1].y - cell[0].y;
+  const N = cell[3].x - cell[0].x;
+  const P = cell[3].y - cell[0].y;
+  const Q = cell[0].x + cell[2].x - cell[1].x - cell[3].x;
+  const R = cell[0].y + cell[2].y - cell[1].y - cell[3].y;
+
+  // Determine quadratic equation coefficients
+  const a =           - L*R + Q*M;
+  const b = J*R + N*M - L*P - Q*K;
+  const c = J*P - N*K;
+
+  // Determine 2 solutions to the quadratic equation
+  const x1 = (-b + Math.sqrt(b*b - 4*a*c)) / (2*a);
+  const x2 = (-b - Math.sqrt(b*b - 4*a*c)) / (2*a);
+  const y1 = (J - L*x1) / (N + Q*x1);
+  const y2 = (J - L*x2) / (N + Q*x2);
+
+  // Return the solution within the cell
+  if (0 <= x1 && x1 <= 1 && 0 <= y1 && y1 <= 1) {
+    return new Point(x1, y1);
+  }
+  else if (0 <= x2 && x2 <= 1 && 0 <= y2 && y2 <= 1) {
+    return new Point(x2, y2);
+  }
+  else {
+    // Catch degenerate cases near the poles
+    return new Point(0.5, 0.5);
+  }
+}
+
+
+// ==================================================================
 // RUN THE APP
 // ------------------------------------------------------------------
 
-initSvg();
-drawBackground();
-drawGraticule(10);
-drawSpecialCircles();
-drawCountries();
-drawBoundaries();
+//initVectorMap();
+initRasterMap(NE_HYPSO_FILENAME);
 
 </script>
 </body>
