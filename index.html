@@ -308,20 +308,20 @@ function drawSpecialCircles() {
   // Generate equator
   pointLists = [];
   points = [];
-  points.push(project(MAP_AREAS[3].swCorner, 3));
-  points.push(project(MAP_AREAS[4].swCorner));
   points.push(project(MAP_AREAS[0].swCorner));
   points.push(project(MAP_AREAS[1].swCorner));
   points.push(project(MAP_AREAS[2].swCorner));
   points.push(project(MAP_AREAS[3].swCorner));
+  points.push(project(MAP_AREAS[4].swCorner));
+  points.push(project(MAP_AREAS[0].swCorner, 4));
+  pointLists.push(points);
+  points = [];
+  points.push(project(new LatLon(0, MAP_AREAS[5].swCorner.lon), 5));
+  points.push(project(MAP_AREAS[5].neCorner));
   pointLists.push(points);
   points = [];
   points.push(project(MAP_AREAS[4].swCorner));
-  points.push(project(MAP_AREAS[9].neCorner, 10));
-  pointLists.push(points);
-  points = [];
-  points.push(project(MAP_AREAS[2].swCorner));
-  points.push(project(MAP_AREAS[9].neCorner, 9));
+  points.push(project(MAP_AREAS[11].neCorner, 11));
   pointLists.push(points);
 
   // Draw equator
@@ -331,40 +331,40 @@ function drawSpecialCircles() {
 
   // Generate Tropic of Cancer and Arctic Circle
   [EARTH_TILT, 90 - EARTH_TILT].forEach(lat => {
-    points = [project(new LatLon(lat, MAP_AREAS[3].swCorner.lon), 3)];
-    for (let lon = Math.trunc(MAP_AREAS[3].swCorner.lon); lon < MAP_AREAS[2].neCorner.lon + 360; lon++) {
+    points = [project(new LatLon(lat, MAP_AREAS[0].swCorner.lon))];
+    for (let lon = Math.trunc(MAP_AREAS[0].swCorner.lon); lon < MAP_AREAS[4].neCorner.lon + 360; lon++) {
       points.push(project(new LatLon(lat, lon)));
     }
-    points.push(project(new LatLon(lat, MAP_AREAS[2].neCorner.lon)));
+    points.push(project(new LatLon(lat, MAP_AREAS[4].neCorner.lon), 4));
     pointLists.push(points);
   });
 
   // Generate Tropic of Capricorn
   points = [];
-  for (let lon = MAP_AREAS[10].swCorner.lon; lon <= MAP_AREAS[11].neCorner.lon; lon++) {
-    points.push(project(new LatLon(-EARTH_TILT, lon), lon < MAP_AREAS[10].neCorner.lon ? 10 : 11));
-  }
-  pointLists.push(points);
-  points = [];
-  for (let lon = MAP_AREAS[5].swCorner.lon; lon <= MAP_AREAS[5].neCorner.lon; lon++) {
+  for (let lon = MAP_AREAS[5].swCorner.lon; lon <= MAP_AREAS[6].neCorner.lon; lon++) {
     points.push(project(new LatLon(-EARTH_TILT, lon)));
   }
   pointLists.push(points);
   points = [];
-  for (let lon = MAP_AREAS[8].swCorner.lon; lon <= MAP_AREAS[9].neCorner.lon + 360; lon++) {
-    points.push(project(new LatLon(-EARTH_TILT, lon), points.length === 0 ? 8 : undefined));
+  for (let lon = MAP_AREAS[8].swCorner.lon; lon <= MAP_AREAS[8].neCorner.lon; lon++) {
+    points.push(project(new LatLon(-EARTH_TILT, lon), 8));
+  }
+  pointLists.push(points);
+  points = [];
+  for (let lon = MAP_AREAS[10].swCorner.lon; lon <= MAP_AREAS[11].neCorner.lon + 360; lon++) {
+    points.push(project(new LatLon(-EARTH_TILT, lon), points.length === 0 ? 10 : undefined));
   }
   pointLists.push(points);
 
   // Generate Antarctic Circle
   points = [];
-  for (let lon = MAP_AREAS[10].swCorner.lon; lon <= MAP_AREAS[6].neCorner.lon; lon++) {
-    points.push(project(new LatLon(-90 + EARTH_TILT, lon), points.length === 0 ? 10 : undefined));
+  for (let lon = MAP_AREAS[5].swCorner.lon; lon <= MAP_AREAS[7].neCorner.lon; lon++) {
+    points.push(project(new LatLon(-90 + EARTH_TILT, lon)));
   }
   pointLists.push(points);
   points = [];
-  for (let lon = MAP_AREAS[7].swCorner.lon; lon <= MAP_AREAS[9].neCorner.lon + 360; lon++) {
-    points.push(project(new LatLon(-90 + EARTH_TILT, lon), points.length === 0 ? 7 : undefined));
+  for (let lon = MAP_AREAS[9].swCorner.lon; lon <= MAP_AREAS[11].neCorner.lon + 360; lon++) {
+    points.push(project(new LatLon(-90 + EARTH_TILT, lon), points.length === 0 ? 9 : undefined));
   }
   pointLists.push(points);
 
@@ -381,32 +381,32 @@ function drawBackground() {
 
   // Generate background points
   let points = [];
-  points.push(project(new LatLon(MAP_AREAS[10].neCorner.lat, MAP_AREAS[10].swCorner.lon), 10));
+  points.push(project(new LatLon(MAP_AREAS[5].neCorner.lat, MAP_AREAS[5].swCorner.lon), 5));
   for (let lat = 0; lat >= -90; lat--) {
-    points.push(project(new LatLon(lat, MAP_AREAS[10].swCorner.lon), 10));
+    points.push(project(new LatLon(lat, MAP_AREAS[5].swCorner.lon), 5));
   }
-  for (let lon = MAP_AREAS[6].neCorner.lon; lon >= MAP_AREAS[6].swCorner.lon; lon--) {
-    points.push(project(new LatLon(MAP_AREAS[6].neCorner.lat, lon), 6));
-  }
-  points.push(project(MAP_AREAS[11].neCorner, 11));
-  for (let lon = MAP_AREAS[5].swCorner.lon; lon <= MAP_AREAS[5].neCorner.lon; lon++) {
-    points.push(project(new LatLon(MAP_AREAS[5].swCorner.lat, lon)));
-  }
-  points.push(project(MAP_AREAS[5].neCorner));
   for (let lon = MAP_AREAS[7].neCorner.lon; lon >= MAP_AREAS[7].swCorner.lon; lon--) {
-    points.push(project(new LatLon(MAP_AREAS[7].neCorner.lat, lon), 7));
+    points.push(project(new LatLon(MAP_AREAS[7].neCorner.lat, lon)));
   }
-  for (let lat = -90; lat <= 0; lat++) {
-    points.push(project(new LatLon(lat, MAP_AREAS[9].neCorner.lon), 9));
+  points.push(project(MAP_AREAS[6].neCorner, 6));
+  for (let lon = MAP_AREAS[8].swCorner.lon; lon <= MAP_AREAS[8].neCorner.lon; lon++) {
+    points.push(project(new LatLon(MAP_AREAS[8].swCorner.lat, lon), 8));
   }
   points.push(project(MAP_AREAS[8].neCorner));
-  for (let lat = 0; lat < 90; lat++) {
-    points.push(project(new LatLon(lat, MAP_AREAS[2].neCorner.lon)));
+  for (let lon = MAP_AREAS[9].neCorner.lon; lon >= MAP_AREAS[9].swCorner.lon; lon--) {
+    points.push(project(new LatLon(MAP_AREAS[9].neCorner.lat, lon), 9));
   }
-  for (let lat = 90; lat >= 0; lat--) {
-    points.push(project(new LatLon(lat, MAP_AREAS[3].swCorner.lon), 3) );
+  for (let lat = -90; lat <= 0; lat++) {
+    points.push(project(new LatLon(lat, MAP_AREAS[11].neCorner.lon), 11));
   }
   points.push(project(MAP_AREAS[10].neCorner));
+  for (let lat = 0; lat < 90; lat++) {
+    points.push(project(new LatLon(lat, MAP_AREAS[4].neCorner.lon), 4));
+  }
+  for (let lat = 90; lat >= 0; lat--) {
+    points.push(project(new LatLon(lat, MAP_AREAS[0].swCorner.lon)));
+  }
+  points.push(project(MAP_AREAS[5].neCorner));
 
   // Draw background
   fGID('background').setAttribute(
@@ -509,18 +509,18 @@ const SOUTH_POLE_R_ORIGIN = new Point( 1.5,   COS_30);
 
 // List of the 12 MapArea objects
 const MAP_AREAS = [
+  [-160, new LatLon(  0, -168.5), new LatLon( 90, -115  ), NORTH_POLE_ORIGIN  ,  120],
+  [ -70, new LatLon(  0, -115  ), new LatLon( 90,  -25  ), NORTH_POLE_ORIGIN  ,   60],
   [  20, new LatLon(  0,  -25  ), new LatLon( 90,   65  ), NORTH_POLE_ORIGIN  ,    0],
   [ 110, new LatLon(  0,   65  ), new LatLon( 90,  155  ), NORTH_POLE_ORIGIN  ,  -60],
   [-160, new LatLon(  0,  155  ), new LatLon( 90, -168.5), NORTH_POLE_ORIGIN  , -120],
-  [-160, new LatLon(  0, -168.5), new LatLon( 90, -115  ), NORTH_POLE_ORIGIN  ,  120],
-  [ -70, new LatLon(  0, -115  ), new LatLon( 90,  -25  ), NORTH_POLE_ORIGIN  ,   60],
-  [  20, new LatLon(-45,  -25  ), new LatLon(  0,   65  ), SOUTH_POLE_B_ORIGIN, -180],
+  [-160, new LatLon(-90, -150  ), new LatLon(  0, -115  ), SOUTH_POLE_L_ORIGIN,  180],
+  [ -70, new LatLon(-90, -115  ), new LatLon(  0,  -25  ), SOUTH_POLE_L_ORIGIN, -120],
   [  20, new LatLon(-90,  -25  ), new LatLon(-45,   15  ), SOUTH_POLE_L_ORIGIN,  -60],
+  [  20, new LatLon(-45,  -25  ), new LatLon(  0,   65  ), SOUTH_POLE_B_ORIGIN, -180],
   [  20, new LatLon(-90,   15  ), new LatLon(-45,   65  ), SOUTH_POLE_R_ORIGIN,   60],
   [ 110, new LatLon(-90,   65  ), new LatLon(  0,  155  ), SOUTH_POLE_R_ORIGIN,  120],
   [-160, new LatLon(-90,  155  ), new LatLon(  0, -150  ), SOUTH_POLE_R_ORIGIN,  180],
-  [-160, new LatLon(-90, -150  ), new LatLon(  0, -115  ), SOUTH_POLE_L_ORIGIN,  180],
-  [ -70, new LatLon(-90, -115  ), new LatLon(  0,  -25  ), SOUTH_POLE_L_ORIGIN, -120],
 ].map(params => new MapArea(...params));
 
 // ------------------------------------------------------------------
