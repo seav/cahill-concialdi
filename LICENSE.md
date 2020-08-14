@@ -27,3 +27,12 @@ This repository includes the following file from the [Complex.js](https://github
 This repository includes the following files that contain data from [Natural Earth](http://naturalearthdata.com/) which is under the public domain:
 * ne-boundaries.js
 * ne-country-areas.js
+
+This repository also includes the following image files also derived from public domain raster imagery from Natural Earth:
+* ne-i.jpg
+* ne-hypso.jpg
+
+## NASA imagery
+This repository includes the following public domain image files from NASA:
+* nasa-blue-marble-ng.jpg
+* nasa-black-marble.jpg
