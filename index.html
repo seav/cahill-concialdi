@@ -666,6 +666,8 @@ const NASA_BLACK_FILENAME = 'nasa-black-marble.jpg';
 const NE_I_FILENAME       = 'ne-i.jpg';
 const NE_HYPSO_FILENAME   = 'ne-hypso.jpg';
 
+const PIXEL_DENSITY = 2;
+
 // ------------------------------------------------------------------
 
 var Canvas;            // Canvas HTML element
@@ -680,8 +682,8 @@ var SourceRasterData;  // Source map's raw image data
 function initRasterMap(filename) {
 
   Canvas = fQS('canvas');
-  Canvas.width = Canvas.clientWidth;
-  RasterPpu = Canvas.clientWidth / MAP_WIDTH;
+  Canvas.width = Canvas.clientWidth * PIXEL_DENSITY;
+  RasterPpu = Canvas.width / MAP_WIDTH;
   Canvas.height = RasterPpu * MAP_HEIGHT;
   CanvasCtx = Canvas.getContext('2d');
   CanvasData = CanvasCtx.getImageData(0, 0, Canvas.width, Canvas.height);
