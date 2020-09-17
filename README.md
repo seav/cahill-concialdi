@@ -30,12 +30,14 @@ Inverse projection refers to the process of reversing a forward projection. That
 
 Similar to the forward projection, I could have simply ported Justin’s Java code which has methods for the inverse projection, but because of the customizations that I implemented in my forward projection code, porting would not be as easy.
 
-Instead, I decided to implement an approximate and faux inverse projection. I divided the map into 1°×1° cells and treated each cell as a simple linear quadrilateral. I then solved the system of quadratic equations needed to convert any Cartesian point in any map cell to its relative position in the spherical cell. This worked quite well because the faux linear cells are visually indistinguishable from the true curved projected cells unless you were way too zoomed in.
+Instead, I decided to implement an approximate and faux inverse projection. I divided the map into 1°×1° cells and treated each cell as a simple linear quadrilateral. I then solved the system of quadratic equations needed to convert any Cartesian point in any map cell to its relative position in the corresponding spherical cell. This worked quite well because the faux linear cells are visually indistinguishable from the true curved projected cells unless you were way too zoomed in.
 
 ### Bering Strait cut
 One significant change that I did from Luca’s original arrangement is that I used 168.5°W as my dividing line on the Bering Strait instead of Luca’s original 170°W which clips the tip of the Chukchi Peninsula on the easternmost part of Russia and the large St. Lawrence Island in Alaska. Unfortunately, there is no line of longitude passing through the Bering Strait that doesn’t cut any island, but using 168.5°W at least only cuts the minor Aleutian island of Umnak.
 
-## Vector data from Natural Earth
+## Data sources
+
+### Vector data from Natural Earth
 To depict the landmasses, countries, and boundaries, I simply grabbed the [GeoJSON data](https://github.com/nvkelso/natural-earth-vector/tree/master/geojson) from [Natural Earth](http://naturalearthdata.com/), and simplified it by:
 * rounding coordinates to 2 decimal places,
 * stripping out the excess properties,
@@ -44,7 +46,7 @@ To depict the landmasses, countries, and boundaries, I simply grabbed the [GeoJS
 
 In addition, I manually divided Antarctica along the 150°W meridian and the aforementioned island of Umnak along the 168.5°W meridian to match the cuts of the map projection.
 
-## Raster imagery from Natural Earth and NASA
+### Raster imagery from Natural Earth and NASA
 For the raster map layers, I included the following four map imagery from Natural Earth and NASA:
 * [Natural Earth I](https://www.naturalearthdata.com/downloads/10m-raster-data/10m-natural-earth-1/)
 * [Natural Earth Cross-blended Hypsometric Tints](https://www.naturalearthdata.com/downloads/10m-raster-data/10m-cross-blend-hypso/)
