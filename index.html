@@ -136,11 +136,19 @@ const fCSVGE = name     => document.createElementNS(SVG_NS, name);
 // SVG XML namespace
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+// Channels in Canvas data: RGBA
+const NUM_CANVAS_DATA_CHANNELS = 4;
+
+// Opaque alpha value
+const OPAQUE_ALPHA = 255;
+
+
 // Math constants
-const HALF_ROOT_3 = Math.sqrt(3)/2;
-const HALF_PI     = Math.PI/2;
-const QUARTER_PI  = Math.PI/4;
-const COS_30      = Math.cos(Math.PI/6);
+const HALF_ROOT_3    = Math.sqrt(3)/2;
+const HALF_PI        = Math.PI/2;
+const QUARTER_PI     = Math.PI/4;
+const COS_30         = Math.cos(Math.PI/6);
+const DEGS_IN_CIRCLE = 360;
 
 // Tilt of the earth's poles in degrees; used to draw the tropic and polar circles
 const EARTH_TILT = 23.43;
@@ -478,6 +486,8 @@ class MapArea {
     this.hasAntimeridian = swCorner.lon > neCorner.lon;
   }
 
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
   // Returns true if the specified LatLon object is inside the map area
   // Note: Assumes that the param is within the Earth
   //       (lat: [-90°,90°]; lon: [-180°,180°])
@@ -491,6 +501,8 @@ class MapArea {
       )
     );
   }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   // Returns a Point object representing the projected map coordinates of a
   // given LatLon object in degrees, taking scaling, but not tilt, into account.
@@ -511,6 +523,8 @@ class MapArea {
       OCTANT_SCALE * (this.origin.y + point.x * sinVal + point.y * cosVal),
     );
   }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   // Returns a new LatLon object in degrees representing the normalized
   // coordinates given a LatLon object in degrees, where:
@@ -706,6 +720,170 @@ let SourceRasterData;  // Source map's raw image data
 
 // ------------------------------------------------------------------
 
+// Class to represent a 1°×1° cell of the raster map
+class MapCell {
+
+  constructor(swLatLon, cellCorners, maskCorners) {
+
+    // Original LatLon of the cell's SW corner
+    this.swLatLon = swLatLon;
+
+    // Array of projected coordinates (as Point objects) of the cell corners
+    // starting from the SW corner going counterclockwise
+    this.cellCorners = cellCorners;
+
+    // Same as above but for the cell mask to account for the half-cells along
+    // the Bering Strait cut: we only draw pixels within the mask
+    this.maskCorners = maskCorners;
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  // Draws this cell's portion of the raster map by writing into the global
+  // CanvasData object and reading from the SourceRasterData object
+  drawCell() {
+
+    const xs = this.maskCorners.map(point => point.x);
+    const ys = this.maskCorners.map(point => point.y);
+    const minX = Math.floor(Math.min(...xs));
+    const maxX = Math.ceil (Math.max(...xs));
+    const minY = Math.floor(Math.min(...ys));
+    const maxY = Math.ceil (Math.max(...ys));
+
+    for   (let x = minX; x < maxX; x++) {
+      for (let y = minY; y < maxY; y++) {
+
+        const pixelPos = new Point(x, y);
+
+        if (!this.isInMask(pixelPos)) continue;
+
+        const relPos = this.getRelativeCellLatLon(pixelPos);
+
+        const xOffset = (this.swLatLon.lon + DEGS_IN_CIRCLE/2) % DEGS_IN_CIRCLE + relPos.lon;
+        const yOffset = DEGS_IN_CIRCLE/4 - this.swLatLon.lat - relPos.lat;
+        const srcDataIdx = NUM_CANVAS_DATA_CHANNELS * (
+          Math.floor(SourceRasterPpd * yOffset) * DEGS_IN_CIRCLE * SourceRasterPpd +
+          Math.floor(SourceRasterPpd * xOffset)
+        );
+        const destDataIdx = NUM_CANVAS_DATA_CHANNELS * (y * Canvas.width + x);
+
+        CanvasData.data[destDataIdx    ] = SourceRasterData[srcDataIdx    ];
+        CanvasData.data[destDataIdx + 1] = SourceRasterData[srcDataIdx + 1];
+        CanvasData.data[destDataIdx + 2] = SourceRasterData[srcDataIdx + 2];
+        CanvasData.data[destDataIdx + 3] = OPAQUE_ALPHA;
+      }
+    }
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  // Returns true if the given point lies inside the cell mask.
+  // This is implemented as a simplified point-in-polygon algorithm.
+  isInMask(point) {
+    let numIntersections = 0;
+    for (let idx = 0; idx < this.maskCorners.length; idx++) {
+      const edgePointA = this.maskCorners[idx];
+      const edgePointB = this.maskCorners[(idx + 1) % this.maskCorners.length];
+      if (
+        point.x >= Math.min(edgePointA.x, edgePointB.x) &&
+        point.x <  Math.max(edgePointA.x, edgePointB.x)
+      ) {
+        if (
+          point.y >= Math.max(edgePointA.y, edgePointB.y) ||
+          point.y >= Math.min(edgePointA.y, edgePointB.y) &&
+          point.y >= edgePointA.y + (point.x - edgePointA.x) / (edgePointB.x - edgePointA.x) * (edgePointB.y - edgePointA.y)
+        ) numIntersections++;
+      }
+    }
+    return numIntersections % 2 === 1;
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  // Returns the relative spherical coordinates as a LatLon object
+  // of a given "projected" point inside this cell
+  getRelativeCellLatLon(point) {
+
+    // Given 1°×1° cell with corners in projected map coordinates:
+    //   - SW corner = (A, B) = this.cellCorners[0]
+    //   - SE corner = (C, D) = this.cellCorners[1]
+    //   - NW corner = (E, F) = this.cellCorners[3]
+    //   - NE corner = (G, H) = this.cellCorners[2]
+
+    const corners = this.cellCorners;
+
+    // Set of equations determining the "projected" coordinates (x′, y′)
+    // of an input relative coordinates (x, y) into a cell,
+    // where (x₀, y₀) and (x₁, y₁) are intermediate coordinates:
+    //   1. x₀ = A + (C - A)x
+    //      y₀ = B + (D - B)x
+    //      x₁ = E + (G - E)x
+    //      y₁ = F + (H - F)x
+    //   2. x′ = x₀ + (x₁ - x₀)y
+    //      y′ = y₀ + (y₁ - y₀)y
+    //
+    // Equations above combined into a system of 2 equations with unknowns x, y:
+    //   x′ - A = (C - A)x + (E - A)y + (A + G - C - E)xy
+    //   y′ - B = (D - B)x + (F - B)y + (B + H - D - F)xy
+    //
+    // Helper coefficients for the system of equations:
+    //   J = x′ - A
+    //   K = y′ - B
+    //   L = C - A
+    //   M = D - B
+    //   N = E - A
+    //   P = F - B
+    //   Q = A + G - C - E
+    //   R = B + H - D - F
+
+    const J = point.x - corners[0].x;
+    const K = point.y - corners[0].y;
+    const L = corners[1].x - corners[0].x;
+    const M = corners[1].y - corners[0].y;
+    const N = corners[3].x - corners[0].x;
+    const P = corners[3].y - corners[0].y;
+    const Q = corners[0].x + corners[2].x - corners[1].x - corners[3].x;
+    const R = corners[0].y + corners[2].y - corners[1].y - corners[3].y;
+
+    // Same system of equations above but using helper coefficients:
+    //   J = Lx + Ny + Qxy
+    //   K = Mx + Py + Rxy
+    //
+    // Combined equation in terms of y:
+    //   y = (J - Lx)/(N + Qx) = (K - Mx)/(P + Rx)
+    //
+    // Quadratic equation with variable x:
+    //   (-LR + QM)x² + (JR + NM - LP - QK)x + (JP - NK) = 0
+
+    // Quadratic equation coefficients:
+    const a =           - L*R + Q*M;
+    const b = J*R + N*M - L*P - Q*K;
+    const c = J*P - N*K;
+
+    // Determine 2 solutions to the quadratic equation
+    const x1 = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+    const x2 = (-b - Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+    const y1 = (J - L * x1) / (N + Q * x1);
+    const y2 = (J - L * x2) / (N + Q * x2);
+
+    // Return the solution within the cell
+    if (0 <= x1 && x1 <= 1 && 0 <= y1 && y1 <= 1) {
+      return new LatLon(y1, x1);
+    }
+    else if (0 <= x2 && x2 <= 1 && 0 <= y2 && y2 <= 1) {
+      return new LatLon(y2, x2);
+    }
+    else {
+      // Catch degenerate cases at the poles where the cells effectively become
+      // thin triangles. In this case, just return the middle of the cell.
+      // This is okay since the poles are effectively featureless.
+      return new LatLon(0.5, 0.5);
+    }
+  }
+}
+
+// ------------------------------------------------------------------
+
 function initRasterMap(filename) {
 
   Canvas = fQS('canvas');
@@ -738,17 +916,31 @@ function initRasterMap(filename) {
 // index by iterating over the MapArea's 1°×1° cells
 function drawRasterMapArea(area, idx) {
   for (let lat = area.swCorner.lat; lat < area.neCorner.lat; lat++) {
-    const endLon = Math.ceil(area.neCorner.lon) + (area.hasAntimeridian ? 360 : 0);
-    for (let lon = Math.floor(area.swCorner.lon); lon < endLon; lon++) {
-      const clampedLon0 = Math.max(lon    , area.swCorner.lon);
-      const clampedLon1 = Math.min(lon + 1, endLon);
-      const cell =
-        // Raw 2D list of cell's spherical coordinates
+
+    // Account for the antimeridian and the Bering Strait half-cells
+    const antiMeridianAdjust = area.hasAntimeridian ? DEGS_IN_CIRCLE : 0;
+    const startLon = Math.floor(area.swCorner.lon);
+    const endLon   = Math.ceil (area.neCorner.lon) + antiMeridianAdjust;
+
+    for (let lon = startLon; lon < endLon; lon++) {
+
+      const maskedLonPlus0 = Math.max(lon    , area.swCorner.lon);
+      const maskedLonPlus1 = Math.min(lon + 1, area.neCorner.lon + antiMeridianAdjust);
+
+      const cornerPositions =
+        // Raw 2D list of spherical coordinates of the corners
+        // starting from the SW corner going counterclockwise
         [
-          [lat    , clampedLon0],
-          [lat    , clampedLon1],
-          [lat + 1, clampedLon1],
-          [lat + 1, clampedLon0],
+          // Cell corners
+          [lat    , lon    ],
+          [lat    , lon + 1],
+          [lat + 1, lon + 1],
+          [lat + 1, lon    ],
+          // Cell mask corners
+          [lat    , maskedLonPlus0],
+          [lat    , maskedLonPlus1],
+          [lat + 1, maskedLonPlus1],
+          [lat + 1, maskedLonPlus0],
         ]
         // Do initial projection into map coordinates
         .map(coords => project(new LatLon(...coords), idx))
@@ -757,123 +949,14 @@ function drawRasterMapArea(area, idx) {
           RasterPpu * (point.x * MAP_TILT_COS - point.y * MAP_TILT_SIN + MAP_VIEW_ORIGIN.x),
           RasterPpu * (point.x * MAP_TILT_SIN + point.y * MAP_TILT_COS + MAP_VIEW_ORIGIN.y),
         ));
-      drawCell(cell, new LatLon(lat, lon));
+
+      const cell = new MapCell(
+        new LatLon(lat, lon),
+        cornerPositions.slice(0, 4),
+        cornerPositions.slice(4, 8),
+      );
+      cell.drawCell();
     }
-  }
-}
-
-// ------------------------------------------------------------------
-
-function drawCell(cell, latLon) {
-
-  const xs = cell.map(point => point.x);
-  const ys = cell.map(point => point.y);
-  const minX = Math.floor(Math.min(...xs));
-  const maxX = Math.ceil (Math.max(...xs));
-  const minY = Math.floor(Math.min(...ys));
-  const maxY = Math.ceil (Math.max(...ys));
-
-  for   (let x = minX; x < maxX; x++) {
-    for (let y = minY; y < maxY; y++) {
-      const pixelPos = new Point(x, y);
-      if (isInCell(pixelPos, cell)) {
-        const pos = getCellPos(pixelPos, cell);
-        const srcIdx  = 4*(
-          Math.floor(SourceRasterPpd * (90 - latLon.lat - pos.y))*360*SourceRasterPpd +
-          Math.floor(SourceRasterPpd * ((latLon.lon + 180)%360 + pos.x))
-        );
-        const destIdx = 4*(x + y*Canvas.width);
-        CanvasData.data[destIdx    ] = SourceRasterData[srcIdx    ];
-        CanvasData.data[destIdx + 1] = SourceRasterData[srcIdx + 1];
-        CanvasData.data[destIdx + 2] = SourceRasterData[srcIdx + 2];
-        CanvasData.data[destIdx + 3] = 255;
-      }
-    }
-  }
-}
-
-// ------------------------------------------------------------------
-
-function isInCell(point, cell) {
-  let numIntersections = 0;
-  for (let idx = 0; idx < cell.length; idx++) {
-    const edgePointA = cell[idx];
-    const edgePointB = cell[(idx + 1) % cell.length];
-    if (
-      point.x >= Math.min(edgePointA.x, edgePointB.x) &&
-      point.x <  Math.max(edgePointA.x, edgePointB.x)
-    ) {
-      if (
-        point.y >= Math.max(edgePointA.y, edgePointB.y) ||
-        point.y >= Math.min(edgePointA.y, edgePointB.y) &&
-        point.y >= edgePointA.y + (point.x - edgePointA.x) / (edgePointB.x - edgePointA.x) * (edgePointB.y - edgePointA.y)
-      ) numIntersections++;
-    }
-  }
-  return numIntersections % 2 === 1;
-}
-
-// ------------------------------------------------------------------
-
-function getCellPos(point, cell) {
-
-  // Given 1°×1° cell with vertices in projected map coordinates,
-  // (A,B), (C,D), (G,H), (E,F), starting from the SW corner going CCW
-  //
-  // System of equations determining the projected position into a cell:
-  //   1. x₀ = A + (C - A)x
-  //      y₀ = B + (D - B)x
-  //      x₁ = E + (G - E)x
-  //      y₁ = F + (H - F)x
-  //   2. x′ = x₀ + (x₁ - x₀)y
-  //      y′ = y₀ + (y₁ - y₀)y
-  //
-  // Combined system:
-  //   x′ - A = (C - A)x + (E - A)y + (A + G - C - E)xy
-  //   y′ - B = (D - B)x + (F - B)y + (B + H - D - F)xy
-  //
-  // Helper coefficients:
-  //   J = x' - A
-  //   K = y' - B
-  //   L = C - A
-  //   M = D - B
-  //   N = E - A
-  //   P = F - B
-  //   Q = G + A - E - C
-  //   R = H + B - F - D
-
-  const J = point.x - cell[0].x;
-  const K = point.y - cell[0].y;
-  const L = cell[1].x - cell[0].x;
-  const M = cell[1].y - cell[0].y;
-  const N = cell[3].x - cell[0].x;
-  const P = cell[3].y - cell[0].y;
-  const Q = cell[0].x + cell[2].x - cell[1].x - cell[3].x;
-  const R = cell[0].y + cell[2].y - cell[1].y - cell[3].y;
-
-  // Determine quadratic equation coefficients
-  const a =           - L*R + Q*M;
-  const b = J*R + N*M - L*P - Q*K;
-  const c = J*P - N*K;
-
-  // Determine 2 solutions to the quadratic equation
-  const x1 = (-b + Math.sqrt(b*b - 4*a*c)) / (2*a);
-  const x2 = (-b - Math.sqrt(b*b - 4*a*c)) / (2*a);
-  const y1 = (J - L*x1) / (N + Q*x1);
-  const y2 = (J - L*x2) / (N + Q*x2);
-
-  // Return the solution within the cell
-  if (0 <= x1 && x1 <= 1 && 0 <= y1 && y1 <= 1) {
-    return new Point(x1, y1);
-  }
-  else if (0 <= x2 && x2 <= 1 && 0 <= y2 && y2 <= 1) {
-    return new Point(x2, y2);
-  }
-  else {
-    // Catch degenerate cases at the poles where the cells effectively become
-    // thin triangles. In this case, just return the middle of the cell.
-    // This is okay since the poles are effectively featureless.
-    return new Point(0.5, 0.5);
   }
 }
 
