@@ -83,7 +83,7 @@ svg, canvas {
 // PRIMITIVE DATA TYPE CLASSES
 // ------------------------------------------------------------------
 
-// Class to represents a 2D point, intended for the SVG canvas
+// Class to represent a Cartesian 2D point
 class Point {
 
   constructor(x, y) {
@@ -118,33 +118,12 @@ class LatLon {
   }
 };
 
-// ------------------------------------------------------------------
-
-// Class to represent a pole; basically a LatLon object
-// with an additional orientation angle
-class Pole {
-
-  constructor(lat, lon, θ) {
-    this.lat = lat;
-    this.lon = lon;
-    this.θ   = θ;
-  }
-
-  isEqual(otherPole) {
-    return (
-      this.lat === otherPole.lat &&
-      this.lon === otherPole.lon &&
-      this.θ   === otherPole.θ
-    );
-  }
-}
-
 
 // ==================================================================
 // BASIC CONSTANTS AND FUNCTIONS
 // ------------------------------------------------------------------
 
-// returns radians given degrees
+// Returns radians given degrees
 const deg2Rad = θ => θ*Math.PI/180;
 
 // DOM function aliases
@@ -166,13 +145,16 @@ const COS_30      = Math.cos(Math.PI/6);
 // Tilt of the earth's poles in degrees; used to draw the tropic and polar circles
 const EARTH_TILT = 23.43;
 
-// Map area parameters
-const MAP_SCALE       = 100;  // equivalent to the side length of a projected octant in SVG units or Canvas pixels
+// Map area parameters (default unit is SVG length unit)
+const OCTANT_SCALE    = 100;  // side length of a projected octant
 const MAP_VIEW_ORIGIN = new Point(142, 45.5);
 const MAP_WIDTH       = 302;
 const MAP_HEIGHT      = 178;
-const MAP_TILT        = -5.4;  // in degrees
-const MAP_TILT_RAD    = deg2Rad(MAP_TILT);
+const MAP_TILT_DEG    = -5.4;  // Tilt of the map in degrees
+const MAP_TILT        = deg2Rad(MAP_TILT_DEG);
+const MAP_TILT_COS    = Math.cos(MAP_TILT);
+const MAP_TILT_SIN    = Math.sin(MAP_TILT);
+
 
 // ==================================================================
 // VECTOR MAP LAYERS DRAWING ROUTINES
@@ -181,7 +163,7 @@ const MAP_TILT_RAD    = deg2Rad(MAP_TILT);
 function initVectorMap() {
 
   fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
-  fGID('map').setAttribute('transform', `rotate(${MAP_TILT})`);
+  fGID('map').setAttribute('transform', `rotate(${MAP_TILT_DEG})`);
 
   drawBackground();
   drawGraticule(10);
@@ -192,10 +174,11 @@ function initVectorMap() {
 
 // ------------------------------------------------------------------
 
-// Convert GeoJSON LineString or MultiPolygon coordinates to an SVG path
+// Convert GeoJSON LineString or MultiPolygon coordinates to an SVG path,
+// doing projection along the way
 function convertGeoJsonToSvgPath(geoJson, isMultiPolygon) {
-  let path = fCSVGE('path');
-  let lineStrings = isMultiPolygon ? [].concat(...geoJson) : [geoJson];
+  const path = fCSVGE('path');
+  const lineStrings = isMultiPolygon ? [].concat(...geoJson) : [geoJson];
   path.setAttribute(
     'd',
     lineStrings
@@ -216,7 +199,7 @@ function convertGeoJsonToSvgPath(geoJson, isMultiPolygon) {
 
 // Convert a list of list of Point objects to an SVG path
 function convertPointListsToSvgPath(pointLists, isClosed) {
-  let path = fCSVGE('path');
+  const path = fCSVGE('path');
   path.setAttribute(
     'd',
     pointLists
@@ -234,20 +217,20 @@ function convertPointListsToSvgPath(pointLists, isClosed) {
 function drawCountries() {
   COUNTRY_AREAS.forEach(country => {
 
-    let path = convertGeoJsonToSvgPath(country[1], true);
+    const path = convertGeoJsonToSvgPath(country[1], true);
 
     // Compute fill color based on the country's position
     // where the average of the country's coordinates is a proxy for position
-    let flatLonLatList = [].concat(...[].concat(...country[1]));
-    let numCoords = flatLonLatList.length;
-    let sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
-    let sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
-    let red   = 128 + 128*sumLat/numCoords/90;
-    let green = 128 + 128*sumLon/numCoords/180;
+    const flatLonLatList = [].concat(...[].concat(...country[1]));
+    const numCoords = flatLonLatList.length;
+    const sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
+    const sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
+    let red   = 128 + 128 * sumLat / numCoords / 90;
+    let green = 128 + 128 * sumLon / numCoords / 180;
     let blue  = 255 - (red + green)/2;
-    red   = Math.min(255, red  *1.25);
-    green = Math.min(255, green*1.25);
-    blue  = Math.min(255, blue *1.25);
+    red   = Math.min(255, red   * 1.25);
+    green = Math.min(255, green * 1.25);
+    blue  = Math.min(255, blue  * 1.25);
     let rgb = `rgb(${red},${green},${blue})`;
     path.setAttribute('fill'  , rgb);
     path.setAttribute('stroke', rgb);
@@ -276,7 +259,7 @@ function drawGraticule(interval = DEFAULT_INTERVAL) {
 
   if (!VALID_INTERVALS.includes(interval)) interval = DEFAULT_INTERVAL;
 
-  let pointLists = [];
+  const pointLists = [];
   MAP_AREAS.forEach((area, idx) => {
 
     let points;
@@ -316,7 +299,7 @@ function drawGraticule(interval = DEFAULT_INTERVAL) {
   });
 
   // Draw graticule
-  let path = convertPointListsToSvgPath(pointLists, false);
+  const path = convertPointListsToSvgPath(pointLists, false);
   fGID('graticule').appendChild(path);
 }
 
@@ -325,8 +308,9 @@ function drawGraticule(interval = DEFAULT_INTERVAL) {
 // Draws the equator, tropic circles, and polar circles
 function drawSpecialCircles() {
 
-  let pointLists = [];
+  let pointLists;
   let points;
+  let path;
 
   // Generate equator
   pointLists = [];
@@ -348,7 +332,7 @@ function drawSpecialCircles() {
   pointLists.push(points);
 
   // Draw equator
-  let path = convertPointListsToSvgPath(pointLists, false);
+  path = convertPointListsToSvgPath(pointLists, false);
   path.classList.add('equator');
   fGID('circles').appendChild(path);
 
@@ -403,7 +387,7 @@ function drawSpecialCircles() {
 function drawBackground() {
 
   // Generate background points
-  let points = [];
+  const points = [];
   points.push(project(new LatLon(MAP_AREAS[5].neCorner.lat, MAP_AREAS[5].swCorner.lon), 5));
   for (let lat = 0; lat >= -90; lat--) {
     points.push(project(new LatLon(lat, MAP_AREAS[5].swCorner.lon), 5));
@@ -443,14 +427,24 @@ function drawBackground() {
 // MAP PROJECTION CODE
 // ------------------------------------------------------------------
 
-// 2^(2/3)/6 integral_0^π sin^(-1/3)(x)dx
-const HEXAGON_SCALE = 1.1129126745;
+// Class to represent a pole; basically a LatLon object
+// with an additional orientation angle
+class Pole {
 
-// Pole object representing the standard north pole
-const NORTH_POLE = new Pole(HALF_PI, 0, 0);
+  constructor(lat, lon, θ) {
+    this.lat = lat;
+    this.lon = lon;
+    this.θ   = θ;
+  }
 
-// Pole object representing a pole on the equator at the east vertex of an octant
-const VERTEX = new Pole(0, QUARTER_PI, -3 * QUARTER_PI);
+  isEqual(otherPole) {
+    return (
+      this.lat === otherPole.lat &&
+      this.lon === otherPole.lon &&
+      this.θ   === otherPole.θ
+    );
+  }
+}
 
 // ------------------------------------------------------------------
 
@@ -470,12 +464,14 @@ class MapArea {
     // Indicates if the octant is in the northern hemisphere
     this.isNorth = neCorner.lat > 0;
 
-    // Point object representing the position of the projected N or S pole
+    // Point object representing the position of the projected N or S pole.
+    // Note: This does not yet take map scaling and rotation into account.
     this.origin = origin;
 
-    // Angle in radians representing the direction of S for the N pole or N for the S pole
-    // 0° points down and positive degrees runs clockwise
-    // Note: constructor param must be in degrees
+    // Angle in radians representing the direction of S for the N pole or N for
+    // the S pole and where 0° points down and positive degrees runs clockwise.
+    // Note 1: This does not yet take map scaling and tilt into account.
+    // Note 2: Constructor param must be in degrees.
     this.angle = deg2Rad(angle);
 
     // Indicates if the map area contains the antimeridian (180°)
@@ -483,7 +479,8 @@ class MapArea {
   }
 
   // Returns true if the specified LatLon object is inside the map area
-  // Note: Assumes that the param is within the Earth (lat: [-90°,90°]; lon: [-180°,180°])
+  // Note: Assumes that the param is within the Earth
+  //       (lat: [-90°,90°]; lon: [-180°,180°])
   contains(latLon) {
     return (
       this.swCorner.lat <= latLon.lat && latLon.lat <= this.neCorner.lat &&
@@ -495,22 +492,30 @@ class MapArea {
     );
   }
 
-  // Given a LatLon object in degrees, returns a Point object representing the
-  // projection to the map based on this map area's attributes
+  // Returns a Point object representing the projected map coordinates of a
+  // given LatLon object in degrees, taking scaling, but not tilt, into account.
   project(latLon) {
-    let normalLatLon = this._getNormalizedOctantLatLon(latLon);
-    let point = projectInOctant(normalLatLon.toRadians());
+
+    // Normalize input then do basic octant projection (no scaling or tilt)
+    const normalLatLon = this._getNormalizedOctantLatLon(latLon);
+    const point = projectInOctant(normalLatLon.toRadians());
+
+    // Invert x to reverse the absolute function applied in the normalization
     if (!this.isNorth) point.x = -point.x;
+
+    // Return projected coordinates with scaling
+    const cosVal = Math.cos(this.angle);
+    const sinVal = Math.sin(this.angle);
     return new Point(
-      MAP_SCALE*(this.origin.x + point.x*Math.cos(this.angle) - point.y*Math.sin(this.angle)),
-      MAP_SCALE*(this.origin.y + point.x*Math.sin(this.angle) + point.y*Math.cos(this.angle)),
+      OCTANT_SCALE * (this.origin.x + point.x * cosVal - point.y * sinVal),
+      OCTANT_SCALE * (this.origin.y + point.x * sinVal + point.y * cosVal),
     );
   }
 
-  // Given a LatLon object in degrees, returns the normalized coordinates as a
-  // new LatLon object in degrees where:
+  // Returns a new LatLon object in degrees representing the normalized
+  // coordinates given a LatLon object in degrees, where:
   // - latitude is the distance from the equator (regardless if N/S)
-  // - longitude is the difference from the octant's center longitude (+ goes east)
+  // - longitude is the difference from the octant's center longitude
   _getNormalizedOctantLatLon(latLon) {
     return new LatLon(
       Math.abs(latLon.lat),
@@ -523,6 +528,21 @@ class MapArea {
     );
   }
 }
+
+// ------------------------------------------------------------------
+
+// 2^(2/3)/6 ∫₀^π sin^(-1/3)(x)dx
+//
+// This constant value is copied from jkunimune15/Map-Projections:
+// https://github.com/jkunimune15/Map-Projections/blob/
+//   eb64c3f91414b22c45db4bd9642fa1aa748ea238/src/maps/Octohedral.java#L119
+const HEXAGON_SCALE = 1.1129126745;
+
+// Pole object representing the standard N pole
+const NORTH_POLE = new Pole(HALF_PI, 0, 0);
+
+// Pole object representing a pole on the equator at the east vertex of an octant
+const VERTEX = new Pole(0, QUARTER_PI, -3 * QUARTER_PI);
 
 // Constants for the origin field of the MapArea class
 const NORTH_POLE_ORIGIN   = new Point(0, 0);
@@ -549,20 +569,24 @@ const MAP_AREAS = [
 // ------------------------------------------------------------------
 
 // The entry function to project a LatLon object in degrees to its map position
-// as a Point object.
+// as a Point object, not taking tilt into account.
 // If the areaIdx param is specified, it will coerce projection on that MapArea,
 // otherwise it will select the first MapArea that contains the LatLon object.
 // The areaIdx param is needed because the edges of the MapAreas overlap and may
 // project to different places on the map if the MapAreas aren't adjacent.
 function project(latLon, areaIdx) {
-  let area = areaIdx ? MAP_AREAS[areaIdx] : MAP_AREAS.find(area => area.contains(latLon));
+  const area = areaIdx
+    ? MAP_AREAS[areaIdx]
+    : MAP_AREAS.find(area => area.contains(latLon));
   return area.project(latLon);
 }
 
 // ------------------------------------------------------------------
 
-// This takes a LatLon object in radians and returns the normalized projected
-// map position as a Point object.
+// Returns the basic projected octant-based map coordinates as a Point object
+// of a given LatLon object in radians. The octant is defined as an upright
+// equilateral triangle where the N pole is the top vertex and the equator is
+// the bottom side and the central meridian/altitude is 0° longitude.
 //
 // This function is an adaptation of faceProject() in jkunimune15/Map-Projections:
 // https://github.com/jkunimune15/Map-Projections/blob/
@@ -570,30 +594,30 @@ function project(latLon, areaIdx) {
 function projectInOctant(latLon) {
 
   // Temporarily negate negative longitudes to take advantage of octant symmetry
-  let negate = latLon.lon < 0 ? -1 : 1;
+  const negate = latLon.lon < 0 ? -1 : 1;
   latLon.lon = negate * latLon.lon;
 
   // Get coordinates of latLon as seen from the VERTEX pole
-  let oblique = mapObliqueLatLon(latLon, VERTEX);
+  const oblique = mapObliqueLatLon(latLon, VERTEX);
 
   // Select original latLon or oblique latLon depending on which is closer
   // to the north or VERTEX poles
-  let latLonPrime = latLon.lat > oblique.lat ? latLon : oblique;
+  const latLonPrime = latLon.lat > oblique.lat ? latLon : oblique;
 
   // Apply the conformal projection
-  let w = new Complex({
+  const w = new Complex({
     r   : Math.pow(Math.tan(QUARTER_PI - latLonPrime.lat/2), 2/3),
     phi : latLonPrime.lon * 2/3,
   });
-  let z = projectConformal(w);
+  const z = projectConformal(w);
 
   // Return the projected point, taking care to reverse the temporary negation
   return (
     latLon.lat > oblique.lat
-      ? new Point(negate*z.im, z.re)
+      ? new Point(negate * z.im, z.re)
       : new Point(
-        negate*(-HALF_ROOT_3*z.re - z.im/2 + 1/2),
-        -z.re/2 + HALF_ROOT_3*z.im + HALF_ROOT_3,
+        negate * (-HALF_ROOT_3 * z.re - z.im/2 + 1/2),
+        -z.re/2 + HALF_ROOT_3 * z.im + HALF_ROOT_3,
       )
   );
 }
@@ -606,8 +630,8 @@ function projectInOctant(latLon) {
 // https://github.com/jkunimune15/Map-Projections/blob/
 //   f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L162-L167
 function projectConformal(c) {
-  let c1 = c.mul(new Complex({ r: 1, phi: -Math.PI/6 }));
-  let c2 = c1
+  const c1 = c.mul(new Complex({ r: 1, phi: -Math.PI/6 }));
+  const c2 = c1
     .add(c1.pow(7 ).div(21     ))
     .add(c1.pow(11).div(99     ))
     .add(c1.pow(13).div(1287/16));
@@ -616,8 +640,8 @@ function projectConformal(c) {
 
 // ------------------------------------------------------------------
 
-// Compute the relative latitude and longitude of a given LatLon object in radians
-// given a specified pole; returns a new LatLon object in radians.
+// Compute the relative latitude and longitude of a given LatLon object in
+// radians given a specified pole; returns a new LatLon object in radians.
 //
 // This function is an adaptation of obliquifySphc() in jkunimune15/Map-Projections:
 // https://github.com/jkunimune15/Map-Projections/blob/
@@ -626,27 +650,30 @@ function mapObliqueLatLon(latLon, pole) {
 
   if (pole.isEqual(NORTH_POLE)) return latLon.copy();
 
-  let lat1 = (pole.lat === HALF_PI)
+  const δLon = pole.lon - latLon.lon;
+  const cosΔLon = Math.cos(δLon);
+
+  const lat1 = (pole.lat === HALF_PI)
     ? latLon.lat
     : Math.asin(
-        Math.sin(pole.lat)*Math.sin(latLon.lat) +
-        Math.cos(pole.lat)*Math.cos(latLon.lat)*Math.cos(pole.lon - latLon.lon));
+        Math.sin(pole.lat) * Math.sin(latLon.lat) +
+        Math.cos(pole.lat) * Math.cos(latLon.lat) * cosΔLon);
 
   let lon1 = (pole.lat === HALF_PI)
-    ? lon1 = latLon.lon - pole.lon
+    ? lon1 = δLon
     : Math.acos(
         (
-          Math.cos(pole.lat)*Math.sin(latLon.lat) -
-          Math.sin(pole.lat)*Math.cos(latLon.lat)*Math.cos(pole.lon - latLon.lon)
-        )/Math.cos(lat1)
+          Math.cos(pole.lat) * Math.sin(latLon.lat) -
+          Math.sin(pole.lat) * Math.cos(latLon.lat) * cosΔLon
+        ) / Math.cos(lat1)
       ) - Math.PI;
   if (isNaN(lon1)) {
     lon1 = (
-      (Math.cos(pole.lon - latLon.lon) >= 0 && latLon.lat <  pole.lat) ||
-      (Math.cos(pole.lon - latLon.lon) <  0 && latLon.lat < -pole.lat)
+      (cosΔLon >= 0 && latLon.lat <  pole.lat) ||
+      (cosΔLon <  0 && latLon.lat < -pole.lat)
     ) ? 0 : -Math.PI;
   }
-  else if (Math.sin(latLon.lon - pole.lon) > 0) {
+  else if (Math.sin(-δLon) > 0) {
     lon1 = -lon1;
   }
   lon1 -= pole.θ;
@@ -670,12 +697,12 @@ const PIXEL_DENSITY = 2;
 
 // ------------------------------------------------------------------
 
-var Canvas;            // Canvas HTML element
-var CanvasCtx;         // Canvas rendering context
-var CanvasData;        // Canvas image data
-var RasterPpu;         // Ratio of canvas display pixels per SVG unit
-var SourceRasterPpd;   // Source map's pixels per degree measure; must be an integer
-var SourceRasterData;  // Source map's raw image data
+let Canvas;            // Canvas HTML element
+let CanvasCtx;         // Canvas rendering context
+let CanvasData;        // Canvas image data
+let RasterPpu;         // Ratio of canvas display pixels per SVG length unit
+let SourceRasterPpd;   // Source map's pixels per degree measure; must be an integer
+let SourceRasterData;  // Source map's raw image data
 
 // ------------------------------------------------------------------
 
@@ -701,34 +728,38 @@ function initRasterMap(filename) {
     SourceRasterData = sourceCtx.getImageData(0, 0, sourceImage.width, sourceImage.height).data;
 
     MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
+    CanvasCtx.putImageData(CanvasData, 0, 0);
   };
 }
 
 // ------------------------------------------------------------------
 
+// Draws a portion of a raster map corresponding to a given MapArea and its
+// index by iterating over the MapArea's 1°×1° cells
 function drawRasterMapArea(area, idx) {
   for (let lat = area.swCorner.lat; lat < area.neCorner.lat; lat++) {
-    let endLon = Math.ceil(area.neCorner.lon);
-    if (area.hasAntimeridian) endLon += 360;
+    const endLon = Math.ceil(area.neCorner.lon) + (area.hasAntimeridian ? 360 : 0);
     for (let lon = Math.floor(area.swCorner.lon); lon < endLon; lon++) {
       const clampedLon0 = Math.max(lon    , area.swCorner.lon);
       const clampedLon1 = Math.min(lon + 1, endLon);
       const cell =
+        // Raw 2D list of cell's spherical coordinates
         [
           [lat    , clampedLon0],
           [lat    , clampedLon1],
           [lat + 1, clampedLon1],
           [lat + 1, clampedLon0],
         ]
+        // Do initial projection into map coordinates
         .map(coords => project(new LatLon(...coords), idx))
+        // Scale and rotate into final map coordinates (in Canvas pixels)
         .map(point => new Point(
-          (point.x*Math.cos(MAP_TILT_RAD) - point.y*Math.sin(MAP_TILT_RAD) + MAP_VIEW_ORIGIN.x)*RasterPpu,
-          (point.x*Math.sin(MAP_TILT_RAD) + point.y*Math.cos(MAP_TILT_RAD) + MAP_VIEW_ORIGIN.y)*RasterPpu,
+          RasterPpu * (point.x * MAP_TILT_COS - point.y * MAP_TILT_SIN + MAP_VIEW_ORIGIN.x),
+          RasterPpu * (point.x * MAP_TILT_SIN + point.y * MAP_TILT_COS + MAP_VIEW_ORIGIN.y),
         ));
       drawCell(cell, new LatLon(lat, lon));
     }
   }
-  CanvasCtx.putImageData(CanvasData, 0, 0);
 }
 
 // ------------------------------------------------------------------
@@ -786,7 +817,8 @@ function isInCell(point, cell) {
 
 function getCellPos(point, cell) {
 
-  // Cell with vertices (A,B), (C,D), (G,H), (E,F) counterclockwise
+  // Given 1°×1° cell with vertices in projected map coordinates,
+  // (A,B), (C,D), (G,H), (E,F), starting from the SW corner going CCW
   //
   // System of equations determining the projected position into a cell:
   //   1. x₀ = A + (C - A)x
@@ -838,7 +870,9 @@ function getCellPos(point, cell) {
     return new Point(x2, y2);
   }
   else {
-    // Catch degenerate cases near the poles
+    // Catch degenerate cases at the poles where the cells effectively become
+    // thin triangles. In this case, just return the middle of the cell.
+    // This is okay since the poles are effectively featureless.
     return new Point(0.5, 0.5);
   }
 }
