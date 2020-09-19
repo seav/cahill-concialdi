@@ -139,8 +139,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // Channels in Canvas data: RGBA
 const NUM_CANVAS_DATA_CHANNELS = 4;
 
-// Opaque alpha value
-const OPAQUE_ALPHA = 255;
+// Color channel max value
+const MAX_COLOR_VALUE = 255;
 
 
 // Math constants
@@ -233,12 +233,12 @@ function drawCountries() {
     const numCoords = flatLonLatList.length;
     const sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
     const sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
-    let red   = 128 + 128 * sumLat / numCoords / 90;
-    let green = 128 + 128 * sumLon / numCoords / 180;
-    let blue  = 255 - (red + green)/2;
-    red   = Math.min(255, red   * 1.25);
-    green = Math.min(255, green * 1.25);
-    blue  = Math.min(255, blue  * 1.25);
+    let red   = MAX_COLOR_VALUE/2 * (1 + sumLat / numCoords / (DEGS_IN_CIRCLE/4));
+    let green = MAX_COLOR_VALUE/2 * (1 + sumLon / numCoords / (DEGS_IN_CIRCLE/2));
+    let blue  = MAX_COLOR_VALUE - (red + green)/2;
+    red   = Math.min(MAX_COLOR_VALUE, red   * 1.25);
+    green = Math.min(MAX_COLOR_VALUE, green * 1.25);
+    blue  = Math.min(MAX_COLOR_VALUE, blue  * 1.25);
     let rgb = `rgb(${red},${green},${blue})`;
     path.setAttribute('fill'  , rgb);
     path.setAttribute('stroke', rgb);
@@ -273,7 +273,7 @@ function drawGraticule(interval = DEFAULT_INTERVAL) {
     let points;
 
     let endLon = area.neCorner.lon;
-    if (area.hasAntimeridian) endLon += 360;
+    if (area.hasAntimeridian) endLon += DEGS_IN_CIRCLE;
 
     // Generate latitude lines
     for (
@@ -345,9 +345,9 @@ function drawSpecialCircles() {
   fGID('circles').appendChild(path);
 
   // Generate Tropic of Cancer and Arctic Circle
-  [EARTH_TILT, 90 - EARTH_TILT].forEach(lat => {
+  [EARTH_TILT, DEGS_IN_CIRCLE/4 - EARTH_TILT].forEach(lat => {
     points = [project(new LatLon(lat, MAP_AREAS[0].swCorner.lon))];
-    for (let lon = Math.trunc(MAP_AREAS[0].swCorner.lon); lon < MAP_AREAS[4].neCorner.lon + 360; lon++) {
+    for (let lon = Math.trunc(MAP_AREAS[0].swCorner.lon); lon < MAP_AREAS[4].neCorner.lon + DEGS_IN_CIRCLE; lon++) {
       points.push(project(new LatLon(lat, lon)));
     }
     points.push(project(new LatLon(lat, MAP_AREAS[4].neCorner.lon), 4));
@@ -366,7 +366,7 @@ function drawSpecialCircles() {
   }
   pointLists.push(points);
   points = [];
-  for (let lon = MAP_AREAS[10].swCorner.lon; lon <= MAP_AREAS[11].neCorner.lon + 360; lon++) {
+  for (let lon = MAP_AREAS[10].swCorner.lon; lon <= MAP_AREAS[11].neCorner.lon + DEGS_IN_CIRCLE; lon++) {
     points.push(project(new LatLon(-EARTH_TILT, lon), points.length === 0 ? 10 : undefined));
   }
   pointLists.push(points);
@@ -374,12 +374,12 @@ function drawSpecialCircles() {
   // Generate Antarctic Circle
   points = [];
   for (let lon = MAP_AREAS[5].swCorner.lon; lon <= MAP_AREAS[7].neCorner.lon; lon++) {
-    points.push(project(new LatLon(-90 + EARTH_TILT, lon)));
+    points.push(project(new LatLon(-DEGS_IN_CIRCLE/4 + EARTH_TILT, lon)));
   }
   pointLists.push(points);
   points = [];
-  for (let lon = MAP_AREAS[9].swCorner.lon; lon <= MAP_AREAS[11].neCorner.lon + 360; lon++) {
-    points.push(project(new LatLon(-90 + EARTH_TILT, lon), points.length === 0 ? 9 : undefined));
+  for (let lon = MAP_AREAS[9].swCorner.lon; lon <= MAP_AREAS[11].neCorner.lon + DEGS_IN_CIRCLE; lon++) {
+    points.push(project(new LatLon(-DEGS_IN_CIRCLE/4 + EARTH_TILT, lon), points.length === 0 ? 9 : undefined));
   }
   pointLists.push(points);
 
@@ -397,7 +397,7 @@ function drawBackground() {
   // Generate background points
   const points = [];
   points.push(project(new LatLon(MAP_AREAS[5].neCorner.lat, MAP_AREAS[5].swCorner.lon), 5));
-  for (let lat = 0; lat >= -90; lat--) {
+  for (let lat = 0; lat >= -DEGS_IN_CIRCLE/4; lat--) {
     points.push(project(new LatLon(lat, MAP_AREAS[5].swCorner.lon), 5));
   }
   for (let lon = MAP_AREAS[7].neCorner.lon; lon >= MAP_AREAS[7].swCorner.lon; lon--) {
@@ -411,14 +411,14 @@ function drawBackground() {
   for (let lon = MAP_AREAS[9].neCorner.lon; lon >= MAP_AREAS[9].swCorner.lon; lon--) {
     points.push(project(new LatLon(MAP_AREAS[9].neCorner.lat, lon), 9));
   }
-  for (let lat = -90; lat <= 0; lat++) {
+  for (let lat = -DEGS_IN_CIRCLE/4; lat <= 0; lat++) {
     points.push(project(new LatLon(lat, MAP_AREAS[11].neCorner.lon), 11));
   }
   points.push(project(MAP_AREAS[10].neCorner));
-  for (let lat = 0; lat < 90; lat++) {
+  for (let lat = 0; lat < DEGS_IN_CIRCLE/4; lat++) {
     points.push(project(new LatLon(lat, MAP_AREAS[4].neCorner.lon), 4));
   }
-  for (let lat = 90; lat >= 0; lat--) {
+  for (let lat = DEGS_IN_CIRCLE/4; lat >= 0; lat--) {
     points.push(project(new LatLon(lat, MAP_AREAS[0].swCorner.lon)));
   }
   points.push(project(MAP_AREAS[5].neCorner));
@@ -535,8 +535,8 @@ class MapArea {
       Math.abs(latLon.lat),
       this.hasAntimeridian
         ? (
-          (latLon.lon     < 0 ? latLon.lon     + 360 : latLon.lon    ) -
-          (this.centerLon < 0 ? this.centerLon + 360 : this.centerLon)
+          (latLon.lon     < 0 ? latLon.lon     + DEGS_IN_CIRCLE : latLon.lon    ) -
+          (this.centerLon < 0 ? this.centerLon + DEGS_IN_CIRCLE : this.centerLon)
         )
         : latLon.lon - this.centerLon,
     );
@@ -669,9 +669,7 @@ function mapObliqueLatLon(latLon, pole) {
 
   const lat1 = (pole.lat === HALF_PI)
     ? latLon.lat
-    : Math.asin(
-        Math.sin(pole.lat) * Math.sin(latLon.lat) +
-        Math.cos(pole.lat) * Math.cos(latLon.lat) * cosΔLon);
+    : HALF_PI - getLatLonDistance(pole, latLon);
 
   let lon1 = (pole.lat === HALF_PI)
     ? lon1 = δLon
@@ -697,6 +695,20 @@ function mapObliqueLatLon(latLon, pole) {
   return new LatLon(lat1, lon1);
 }
 
+// ------------------------------------------------------------------
+
+// Return the distance in radians of a given LatLon object from another
+// LatLon object, both in radians
+function getLatLonDistance(origin, destination) {
+  const cosΔLon = Math.cos(origin.lon - destination.lon);
+  return (
+    HALF_PI - Math.asin(
+      Math.sin(origin.lat) * Math.sin(destination.lat) +
+      Math.cos(origin.lat) * Math.cos(destination.lat) * cosΔLon
+    )
+  );
+}
+
 
 // ==================================================================
 // RASTER MAP DRAWING ROUTINES
@@ -706,6 +718,9 @@ const NASA_BLUE_FILENAME  = 'nasa-blue-marble-ng.jpg';
 const NASA_BLACK_FILENAME = 'nasa-black-marble.jpg';
 const NE_I_FILENAME       = 'ne-i.jpg';
 const NE_HYPSO_FILENAME   = 'ne-hypso.jpg';
+
+const MIN_TERMINATOR_DISTANCE = deg2Rad(89.5);
+const MAX_TERMINATOR_DISTANCE = deg2Rad(91.5);
 
 const PIXEL_DENSITY = 2;
 
@@ -718,6 +733,11 @@ let RasterPpu;         // Ratio of canvas display pixels per SVG length unit
 let SourceRasterPpd;   // Source map's pixels per degree measure; must be an integer
 let SourceRasterData;  // Source map's raw image data
 
+// Flag that indicates if a terminator should be drawn
+let HasTerminator = false;
+
+let SunPosition = (new LatLon(-EARTH_TILT, 121)).toRadians();
+
 // ------------------------------------------------------------------
 
 // Class to represent a 1°×1° cell of the raster map
@@ -725,7 +745,7 @@ class MapCell {
 
   constructor(swLatLon, cellCorners, maskCorners) {
 
-    // Original LatLon of the cell's SW corner
+    // Original LatLon of the cell's SW corner in degrees
     this.swLatLon = swLatLon;
 
     // Array of projected coordinates (as Point objects) of the cell corners
@@ -757,20 +777,48 @@ class MapCell {
 
         if (!this.isInMask(pixelPos)) continue;
 
-        const relPos = this.getRelativeCellLatLon(pixelPos);
-
-        const xOffset = (this.swLatLon.lon + DEGS_IN_CIRCLE/2) % DEGS_IN_CIRCLE + relPos.lon;
-        const yOffset = DEGS_IN_CIRCLE/4 - this.swLatLon.lat - relPos.lat;
+        const latLon = this.getInverseLatLon(pixelPos);
+        const pixelOffset = new Point(
+          (latLon.lon + DEGS_IN_CIRCLE/2) % DEGS_IN_CIRCLE,
+          DEGS_IN_CIRCLE/4 - latLon.lat,
+        );
         const srcDataIdx = NUM_CANVAS_DATA_CHANNELS * (
-          Math.floor(SourceRasterPpd * yOffset) * DEGS_IN_CIRCLE * SourceRasterPpd +
-          Math.floor(SourceRasterPpd * xOffset)
+          Math.floor(SourceRasterPpd * pixelOffset.y) * DEGS_IN_CIRCLE * SourceRasterPpd +
+          Math.floor(SourceRasterPpd * pixelOffset.x)
         );
         const destDataIdx = NUM_CANVAS_DATA_CHANNELS * (y * Canvas.width + x);
 
-        CanvasData.data[destDataIdx    ] = SourceRasterData[srcDataIdx    ];
-        CanvasData.data[destDataIdx + 1] = SourceRasterData[srcDataIdx + 1];
-        CanvasData.data[destDataIdx + 2] = SourceRasterData[srcDataIdx + 2];
-        CanvasData.data[destDataIdx + 3] = OPAQUE_ALPHA;
+        let pixelData;
+        if (HasTerminator) {
+          const distance = getLatLonDistance(SunPosition, latLon.toRadians());
+          const dayRatio =
+            distance <= MIN_TERMINATOR_DISTANCE
+              ? 1
+              : distance >= MAX_TERMINATOR_DISTANCE
+                ? 0
+                : 1 - (distance - MIN_TERMINATOR_DISTANCE) / (MAX_TERMINATOR_DISTANCE - MIN_TERMINATOR_DISTANCE);
+          const nightOffset = NUM_CANVAS_DATA_CHANNELS * DEGS_IN_CIRCLE**2 * SourceRasterPpd**2 / 2;
+          pixelData = [
+            SourceRasterData[srcDataIdx    ] * dayRatio,
+            SourceRasterData[srcDataIdx + 1] * dayRatio,
+            SourceRasterData[srcDataIdx + 2] * dayRatio,
+          ];
+          pixelData[0] += SourceRasterData[nightOffset + srcDataIdx    ] * (1 - dayRatio);
+          pixelData[1] += SourceRasterData[nightOffset + srcDataIdx + 1] * (1 - dayRatio);
+          pixelData[2] += SourceRasterData[nightOffset + srcDataIdx + 2] * (1 - dayRatio);
+        }
+        else {
+          pixelData = [
+            SourceRasterData[srcDataIdx    ],
+            SourceRasterData[srcDataIdx + 1],
+            SourceRasterData[srcDataIdx + 2],
+          ];
+        }
+
+        CanvasData.data[destDataIdx    ] = pixelData[0];
+        CanvasData.data[destDataIdx + 1] = pixelData[1];
+        CanvasData.data[destDataIdx + 2] = pixelData[2];
+        CanvasData.data[destDataIdx + 3] = MAX_COLOR_VALUE;
       }
     }
   }
@@ -800,9 +848,9 @@ class MapCell {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  // Returns the relative spherical coordinates as a LatLon object
+  // Returns the spherical coordinates in degrees as a LatLon object
   // of a given "projected" point inside this cell
-  getRelativeCellLatLon(point) {
+  getInverseLatLon(point) {
 
     // Given 1°×1° cell with corners in projected map coordinates:
     //   - SW corner = (A, B) = this.cellCorners[0]
@@ -813,7 +861,7 @@ class MapCell {
     const corners = this.cellCorners;
 
     // Set of equations determining the "projected" coordinates (x′, y′)
-    // of an input relative coordinates (x, y) into a cell,
+    // of an input relative coordinates in degrees (x, y) into a cell,
     // where (x₀, y₀) and (x₁, y₁) are intermediate coordinates:
     //   1. x₀ = A + (C - A)x
     //      y₀ = B + (D - B)x
@@ -866,25 +914,32 @@ class MapCell {
     const y1 = (J - L * x1) / (N + Q * x1);
     const y2 = (J - L * x2) / (N + Q * x2);
 
-    // Return the solution within the cell
+    // Get the solution within the cell
+    let latLon;
     if (0 <= x1 && x1 <= 1 && 0 <= y1 && y1 <= 1) {
-      return new LatLon(y1, x1);
+      latLon = new LatLon(y1, x1);
     }
     else if (0 <= x2 && x2 <= 1 && 0 <= y2 && y2 <= 1) {
-      return new LatLon(y2, x2);
+      latLon = new LatLon(y2, x2);
     }
     else {
+      // TODO: Make a better fix for this such as calculating differently
+      //       for polar cells.
       // Catch degenerate cases at the poles where the cells effectively become
       // thin triangles. In this case, just return the middle of the cell.
       // This is okay since the poles are effectively featureless.
-      return new LatLon(0.5, 0.5);
+      latLon = new LatLon(0.5, 0.5);
     }
+
+    latLon.lat += this.swLatLon.lat;
+    latLon.lon += this.swLatLon.lon;
+    return latLon;
   }
 }
 
 // ------------------------------------------------------------------
 
-function initRasterMap(filename) {
+function initRasterMap(filename, renderTerminator) {
 
   Canvas = fQS('canvas');
   Canvas.width = Canvas.clientWidth * PIXEL_DENSITY;
@@ -893,21 +948,57 @@ function initRasterMap(filename) {
   CanvasCtx = Canvas.getContext('2d');
   CanvasData = CanvasCtx.getImageData(0, 0, Canvas.width, Canvas.height);
 
-  const sourceImage = new Image();
-  sourceImage.src = filename;
-  sourceImage.onload = function() {
+  if (renderTerminator) {
 
-    SourceRasterPpd = sourceImage.width / 360;
-    const sourceCanvas = document.createElement('canvas');
-    sourceCanvas.width = sourceImage.width;
-    sourceCanvas.height = sourceImage.height;
-    const sourceCtx = sourceCanvas.getContext('2d')
-    sourceCtx.drawImage(sourceImage, 0, 0);
-    SourceRasterData = sourceCtx.getImageData(0, 0, sourceImage.width, sourceImage.height).data;
+    HasTerminator = true;
 
-    MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
-    CanvasCtx.putImageData(CanvasData, 0, 0);
-  };
+    let numImagesLoaded = 0;
+    let daySourceImage, nightSourceImage;  // Predeclare
+
+    const renderRasterMap = function() {
+
+      SourceRasterPpd = daySourceImage.width / DEGS_IN_CIRCLE;
+      const sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = daySourceImage.width;
+      sourceCanvas.height = daySourceImage.height * 2;
+      const sourceCtx = sourceCanvas.getContext('2d')
+      sourceCtx.drawImage(daySourceImage, 0, 0);
+      sourceCtx.drawImage(nightSourceImage, 0, daySourceImage.height);
+      SourceRasterData = sourceCtx.getImageData(0, 0, daySourceImage.width, daySourceImage.height * 2).data;
+
+      MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
+      CanvasCtx.putImageData(CanvasData, 0, 0);
+    };
+
+    const onloadHandler = function() {
+      numImagesLoaded++;
+      if (numImagesLoaded === 2) renderRasterMap();
+    }
+
+    daySourceImage   = new Image();
+    nightSourceImage = new Image();
+    daySourceImage.src   = NASA_BLUE_FILENAME;
+    nightSourceImage.src = NASA_BLACK_FILENAME;
+    daySourceImage.onload   = onloadHandler;
+    nightSourceImage.onload = onloadHandler;
+  }
+  else {
+    const sourceImage = new Image();
+    sourceImage.src = filename;
+    sourceImage.onload = function() {
+
+      SourceRasterPpd = sourceImage.width / DEGS_IN_CIRCLE;
+      const sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = sourceImage.width;
+      sourceCanvas.height = sourceImage.height;
+      const sourceCtx = sourceCanvas.getContext('2d')
+      sourceCtx.drawImage(sourceImage, 0, 0);
+      SourceRasterData = sourceCtx.getImageData(0, 0, sourceImage.width, sourceImage.height).data;
+
+      MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
+      CanvasCtx.putImageData(CanvasData, 0, 0);
+    };
+  }
 }
 
 // ------------------------------------------------------------------
@@ -966,7 +1057,8 @@ function drawRasterMapArea(area, idx) {
 // ------------------------------------------------------------------
 
 //initVectorMap();
-initRasterMap(NE_HYPSO_FILENAME);
+//initRasterMap(NE_HYPSO_FILENAME);
+initRasterMap(null, true);
 
 </script>
 </body>
