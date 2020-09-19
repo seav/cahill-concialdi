@@ -91,6 +91,21 @@ class Point {
     this.y = y;
   }
 
+  isEqualTo(otherPoint) {
+    return (
+      this.x === otherPoint.x &&
+      this.y === otherPoint.y
+    );
+  }
+
+  getAngleTo(otherPoint) {
+    return Math.atan2(otherPoint.y - this.y, otherPoint.x - this.x);
+  }
+
+  getDistanceTo(otherPoint) {
+    return Math.sqrt((otherPoint.y - this.y)**2 + (otherPoint.x - this.x)**2);
+  }
+
   // Returns an SVG-friendly string representation of the point and
   // rounded to at most 2 decimal points
   toString() {
@@ -146,6 +161,7 @@ const MAX_COLOR_VALUE = 255;
 
 // Math constants
 const HALF_ROOT_3    = Math.sqrt(3)/2;
+const TWO_PI         = 2*Math.PI;
 const HALF_PI        = Math.PI/2;
 const QUARTER_PI     = Math.PI/4;
 const COS_30         = Math.cos(Math.PI/6);
@@ -446,7 +462,7 @@ class Pole {
     this.θ   = θ;
   }
 
-  isEqual(otherPole) {
+  isEqualTo(otherPole) {
     return (
       this.lat === otherPole.lat &&
       this.lon === otherPole.lon &&
@@ -663,7 +679,7 @@ function projectConformal(c) {
 //   1d5a4d97b9e63ef614c133c9e028ba8e44702c10/src/maps/Projection.java#L400-L441
 function mapObliqueLatLon(latLon, pole) {
 
-  if (pole.isEqual(NORTH_POLE)) return latLon.copy();
+  if (pole.isEqualTo(NORTH_POLE)) return latLon.copy();
 
   const δLon = pole.lon - latLon.lon;
   const cosΔLon = Math.cos(δLon);
@@ -690,8 +706,8 @@ function mapObliqueLatLon(latLon, pole) {
     lon1 = -lon1;
   }
   lon1 -= pole.θ;
-  while (lon1 >  Math.PI) lon1 -= 2*Math.PI;
-  while (lon1 < -Math.PI) lon1 += 2*Math.PI;
+  while (lon1 >  Math.PI) lon1 -= TWO_PI;
+  while (lon1 < -Math.PI) lon1 += TWO_PI;
 
   return new LatLon(lat1, lon1);
 }
@@ -757,6 +773,15 @@ class MapCell {
     // Same as above but for the cell mask to account for the half-cells along
     // the Bering Strait cut: we only draw pixels within the mask
     this.maskCorners = maskCorners;
+
+    const isNorthPolar = cellCorners[2].isEqualTo(cellCorners[3]);
+    const isSouthPolar = cellCorners[0].isEqualTo(cellCorners[1]);
+
+    // Indicates if this cell is adjacent to the N/S pole
+    this.isPolar = isNorthPolar || isSouthPolar;
+
+    // If isPolar, indicates if this cell is adjacent to the N pole
+    this.isNorthPolar = isNorthPolar;
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -779,7 +804,9 @@ class MapCell {
 
         if (!this.isInMask(pixelPos)) continue;
 
-        const latLon = this.getInverseLatLon(pixelPos);
+        const latLon = this.isPolar
+          ? this.getPolarInverseLatLon(pixelPos)
+          : this.getInverseLatLon     (pixelPos);
         const pixelOffset = new Point(
           (latLon.lon + DEGS_IN_CIRCLE/2) % DEGS_IN_CIRCLE,
           DEGS_IN_CIRCLE/4 - latLon.lat,
@@ -851,7 +878,7 @@ class MapCell {
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   // Returns the spherical coordinates in degrees as a LatLon object
-  // of a given "projected" point inside this cell
+  // of a given "projected" point inside this cell if cell is not polar
   getInverseLatLon(point) {
 
     // Given 1°×1° cell with corners in projected map coordinates:
@@ -916,26 +943,45 @@ class MapCell {
     const y1 = (J - L * x1) / (N + Q * x1);
     const y2 = (J - L * x2) / (N + Q * x2);
 
-    // Get the solution within the cell
-    let latLon;
-    if (0 <= x1 && x1 <= 1 && 0 <= y1 && y1 <= 1) {
-      latLon = new LatLon(y1, x1);
-    }
-    else if (0 <= x2 && x2 <= 1 && 0 <= y2 && y2 <= 1) {
-      latLon = new LatLon(y2, x2);
-    }
-    else {
-      // TODO: Make a better fix for this such as calculating differently
-      //       for polar cells.
-      // Catch degenerate cases at the poles where the cells effectively become
-      // thin triangles. In this case, just return the middle of the cell.
-      // This is okay since the poles are effectively featureless.
-      latLon = new LatLon(0.5, 0.5);
-    }
-
+    // Return one of the solutions added to the SW corner coordinates
+    let latLon = (0 <= x1 && x1 <= 1 && 0 <= y1 && y1 <= 1)
+      ? new LatLon(y1, x1)
+      : new LatLon(y2, x2);
     latLon.lat += this.swLatLon.lat;
     latLon.lon += this.swLatLon.lon;
     return latLon;
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  // Returns the spherical coordinates in degrees as a LatLon object
+  // of a given "projected" point inside this cell if cell is polar.
+  // The algorithm is basic triangular math assuming that the cell is
+  // shaped like an isosceles triangle with the vertex point at the pole.
+  getPolarInverseLatLon(point) {
+
+    const corners = this.cellCorners;
+
+    // Compute relative latitude as a function of the ratio of the point's
+    // distance to the pole
+    const cellHeight = corners[2].getDistanceTo(corners[1]);
+    const relLat = this.isNorthPolar
+      ? 1 - corners[2].getDistanceTo(point) / cellHeight
+      :     corners[1].getDistanceTo(point) / cellHeight;
+
+    // Compute relative longitude as a function of the angle of the point
+    // with respect to the pole in relation the the vertex angle
+    let cellWidth = this.isNorthPolar
+      ? corners[2].getAngleTo(corners[0]) - corners[2].getAngleTo(corners[1])
+      : corners[1].getAngleTo(corners[2]) - corners[1].getAngleTo(corners[3]);
+    if (cellWidth < 0) cellWidth += TWO_PI;
+    let relLon = this.isNorthPolar
+        ? corners[2].getAngleTo(corners[0]) - corners[2].getAngleTo(point)
+        : corners[1].getAngleTo(point) - corners[1].getAngleTo(corners[3]);
+    if (relLon < 0) relLon += TWO_PI;
+    relLon /= cellWidth;
+
+    return new LatLon(this.swLatLon.lat + relLat, this.swLatLon.lon + relLon);
   }
 }
 
