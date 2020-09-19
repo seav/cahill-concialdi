@@ -605,8 +605,8 @@ const MAP_AREAS = [
 // otherwise it will select the first MapArea that contains the LatLon object.
 // The areaIdx param is needed because the edges of the MapAreas overlap and may
 // project to different places on the map if the MapAreas aren't adjacent.
-function project(latLon, areaIdx) {
-  const area = areaIdx
+function project(latLon, areaIdx = null) {
+  const area = areaIdx !== null
     ? MAP_AREAS[areaIdx]
     : MAP_AREAS.find(area => area.contains(latLon));
   return area.project(latLon);
@@ -797,8 +797,8 @@ class MapCell {
     const minY = Math.floor(Math.min(...ys));
     const maxY = Math.ceil (Math.max(...ys));
 
-    for   (let x = minX; x < maxX; x++) {
-      for (let y = minY; y < maxY; y++) {
+    for   (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
 
         const pixelPos = new Point(x, y);
 
@@ -1065,8 +1065,8 @@ function drawRasterMapArea(area, idx) {
 
     for (let lon = startLon; lon < endLon; lon++) {
 
-      const maskedLonPlus0 = Math.max(lon    , area.swCorner.lon);
-      const maskedLonPlus1 = Math.min(lon + 1, area.neCorner.lon + antiMeridianAdjust);
+      const maskedLonW = Math.max(lon    , area.swCorner.lon);
+      const maskedLonE = Math.min(lon + 1, area.neCorner.lon + antiMeridianAdjust);
 
       const cornerPositions =
         // Raw 2D list of spherical coordinates of the corners
@@ -1078,10 +1078,10 @@ function drawRasterMapArea(area, idx) {
           [lat + 1, lon + 1],
           [lat + 1, lon    ],
           // Cell mask corners
-          [lat    , maskedLonPlus0],
-          [lat    , maskedLonPlus1],
-          [lat + 1, maskedLonPlus1],
-          [lat + 1, maskedLonPlus0],
+          [lat    , maskedLonW],
+          [lat    , maskedLonE],
+          [lat + 1, maskedLonE],
+          [lat + 1, maskedLonW],
         ]
         // Do initial projection into map coordinates
         .map(coords => project(new LatLon(...coords), idx))
