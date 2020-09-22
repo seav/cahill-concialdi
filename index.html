@@ -78,17 +78,16 @@ svg, canvas {
 <script src="ne-country-areas.js"></script>
 <script type="module">
 
+import { TWO_PI, COS_30, DEGS_IN_CIRCLE, deg2Rad } from './math.jsm';
 import { Point, LatLon } from './data-types.jsm';
+import { projectInOctant } from './cahill-octahedral.jsm';
+import { getLatLonDistance } from './spherical.jsm';
 import { getSunLatLon } from './solar-position.jsm';
 
 
 // ==================================================================
 // BASIC CONSTANTS AND FUNCTIONS
 // ------------------------------------------------------------------
-
-// Degree-radian conversion functions
-const deg2Rad = θ => θ*Math.PI/180;
-const rad2Deg = θ => θ*180/Math.PI;
 
 // DOM function aliases
 const fGID   = id       => document.getElementById(id);
@@ -105,15 +104,6 @@ const NUM_CANVAS_DATA_CHANNELS = 4;
 
 // Color channel max value
 const MAX_COLOR_VALUE = 255;
-
-
-// Math constants
-const HALF_ROOT_3    = Math.sqrt(3)/2;
-const TWO_PI         = 2*Math.PI;
-const HALF_PI        = Math.PI/2;
-const QUARTER_PI     = Math.PI/4;
-const COS_30         = Math.cos(Math.PI/6);
-const DEGS_IN_CIRCLE = 360;
 
 // Tilt of the earth's poles in degrees; used to draw the tropic and polar circles
 const EARTH_TILT = 23.43;
@@ -400,27 +390,6 @@ function drawBackground() {
 // MAP PROJECTION CODE
 // ------------------------------------------------------------------
 
-// Class to represent a pole; basically a LatLon object
-// with an additional orientation angle
-class Pole {
-
-  constructor(lat, lon, θ) {
-    this.lat = lat;
-    this.lon = lon;
-    this.θ   = θ;
-  }
-
-  isEqualTo(otherPole) {
-    return (
-      this.lat === otherPole.lat &&
-      this.lon === otherPole.lon &&
-      this.θ   === otherPole.θ
-    );
-  }
-}
-
-// ------------------------------------------------------------------
-
 // Class to represents a map area
 // (either the whole or a portion of an octant / octahedral face)
 class MapArea {
@@ -510,19 +479,6 @@ class MapArea {
 
 // ------------------------------------------------------------------
 
-// 2^(2/3)/6 ∫₀^π sin^(-1/3)(x)dx
-//
-// This constant value is copied from jkunimune15/Map-Projections:
-// https://github.com/jkunimune15/Map-Projections/blob/
-//   eb64c3f91414b22c45db4bd9642fa1aa748ea238/src/maps/Octohedral.java#L119
-const HEXAGON_SCALE = 1.1129126745;
-
-// Pole object representing the standard N pole
-const NORTH_POLE = new Pole(HALF_PI, 0, 0);
-
-// Pole object representing a pole on the equator at the east vertex of an octant
-const VERTEX = new Pole(0, QUARTER_PI, -3 * QUARTER_PI);
-
 // Constants for the origin field of the MapArea class
 const NORTH_POLE_ORIGIN   = new Point(0, 0);
 const SOUTH_POLE_B_ORIGIN = new Point(   0, 2*COS_30);
@@ -558,120 +514,6 @@ function project(latLon, areaIdx = null) {
     ? MAP_AREAS[areaIdx]
     : MAP_AREAS.find(area => area.contains(latLon));
   return area.project(latLon);
-}
-
-// ------------------------------------------------------------------
-
-// Returns the basic projected octant-based map coordinates as a Point object
-// of a given LatLon object in radians. The octant is defined as an upright
-// equilateral triangle where the N pole is the top vertex and the equator is
-// the bottom side and the central meridian/altitude is 0° longitude.
-//
-// This function is an adaptation of faceProject() in jkunimune15/Map-Projections:
-// https://github.com/jkunimune15/Map-Projections/blob/
-//   f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L123-L139
-function projectInOctant(latLon) {
-
-  // Temporarily negate negative longitudes to take advantage of octant symmetry
-  const negate = latLon.lon < 0 ? -1 : 1;
-  latLon.lon = negate * latLon.lon;
-
-  // Get coordinates of latLon as seen from the VERTEX pole
-  const oblique = mapObliqueLatLon(latLon, VERTEX);
-
-  // Select original latLon or oblique latLon depending on which is closer
-  // to the north or VERTEX poles
-  const latLonPrime = latLon.lat > oblique.lat ? latLon : oblique;
-
-  // Apply the conformal projection
-  const w = new Complex({
-    r   : Math.pow(Math.tan(QUARTER_PI - latLonPrime.lat/2), 2/3),
-    phi : latLonPrime.lon * 2/3,
-  });
-  const z = projectConformal(w);
-
-  // Return the projected point, taking care to reverse the temporary negation
-  return (
-    latLon.lat > oblique.lat
-      ? new Point(negate * z.im, z.re)
-      : new Point(
-        negate * (-HALF_ROOT_3 * z.re - z.im/2 + 1/2),
-        -z.re/2 + HALF_ROOT_3 * z.im + HALF_ROOT_3,
-      )
-  );
-}
-
-// ------------------------------------------------------------------
-
-// This is an approximation of the conformal Cahill projection math.
-//
-// This function is an adaptation of polynomial() in jkunimune15/Map-Projections:
-// https://github.com/jkunimune15/Map-Projections/blob/
-//   f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L162-L167
-function projectConformal(c) {
-  const c1 = c.mul(new Complex({ r: 1, phi: -Math.PI/6 }));
-  const c2 = c1
-    .add(c1.pow(7 ).div(21     ))
-    .add(c1.pow(11).div(99     ))
-    .add(c1.pow(13).div(1287/16));
-  return c2.div(new Complex({ r: HEXAGON_SCALE, phi: -Math.PI/6 }));
-}
-
-// ------------------------------------------------------------------
-
-// Compute the relative latitude and longitude of a given LatLon object in
-// radians given a specified pole; returns a new LatLon object in radians.
-//
-// This function is an adaptation of obliquifySphc() in jkunimune15/Map-Projections:
-// https://github.com/jkunimune15/Map-Projections/blob/
-//   1d5a4d97b9e63ef614c133c9e028ba8e44702c10/src/maps/Projection.java#L400-L441
-function mapObliqueLatLon(latLon, pole) {
-
-  if (pole.isEqualTo(NORTH_POLE)) return latLon.copy();
-
-  const δLon = pole.lon - latLon.lon;
-  const cosΔLon = Math.cos(δLon);
-
-  const lat1 = (pole.lat === HALF_PI)
-    ? latLon.lat
-    : HALF_PI - getLatLonDistance(pole, latLon);
-
-  let lon1 = (pole.lat === HALF_PI)
-    ? lon1 = δLon
-    : Math.acos(
-        (
-          Math.cos(pole.lat) * Math.sin(latLon.lat) -
-          Math.sin(pole.lat) * Math.cos(latLon.lat) * cosΔLon
-        ) / Math.cos(lat1)
-      ) - Math.PI;
-  if (isNaN(lon1)) {
-    lon1 = (
-      (cosΔLon >= 0 && latLon.lat <  pole.lat) ||
-      (cosΔLon <  0 && latLon.lat < -pole.lat)
-    ) ? 0 : -Math.PI;
-  }
-  else if (Math.sin(-δLon) > 0) {
-    lon1 = -lon1;
-  }
-  lon1 -= pole.θ;
-  while (lon1 >  Math.PI) lon1 -= TWO_PI;
-  while (lon1 < -Math.PI) lon1 += TWO_PI;
-
-  return new LatLon(lat1, lon1);
-}
-
-// ------------------------------------------------------------------
-
-// Return the distance in radians of a given LatLon object from another
-// LatLon object, both in radians
-function getLatLonDistance(origin, destination) {
-  const cosΔLon = Math.cos(origin.lon - destination.lon);
-  return (
-    HALF_PI - Math.asin(
-      Math.sin(origin.lat) * Math.sin(destination.lat) +
-      Math.cos(origin.lat) * Math.cos(destination.lat) * cosΔLon
-    )
-  );
 }
 
 
@@ -1055,8 +897,8 @@ function drawRasterMapArea(area, idx) {
 // ------------------------------------------------------------------
 
 //initVectorMap();
-//initRasterMap(NE_HYPSO_FILENAME);
-initRasterMap(null, true);
+initRasterMap(NE_HYPSO_FILENAME);
+//initRasterMap(null, true);
 
 </script>
 </body>

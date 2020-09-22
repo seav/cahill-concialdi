@@ -7,12 +7,8 @@
 
 // ------------------------------------------------------------------
 
+import { DEGS_IN_CIRCLE, deg2Rad, rad2Deg } from './math.jsm';
 import { LatLon } from './data-types.jsm';
-
-const DEGS_IN_CIRCLE = 360;
-
-const deg2Rad = θ => θ*Math.PI/180;
-const rad2Deg = θ => θ*180/Math.PI;
 
 // ------------------------------------------------------------------
 
