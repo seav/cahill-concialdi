@@ -18,7 +18,7 @@ For my implementation, the JavaScript source code for the core forward projectio
 |---|---|---|---|
 | `faceProject()` | [src/maps/Octohedral.java](https://github.com/jkunimune15/Map-Projections/blob/f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L123-L139) | `projectInOctant()` | cahill-conformal.mjs |
 | `polynomial()` | [src/maps/Octohedral.java](https://github.com/jkunimune15/Map-Projections/blob/f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L162-L167) | `projectConformal()` | cahill-conformal.mjs |
-| `obliquifySphc()` | [src/maps/Projection.java](https://github.com/jkunimune15/Map-Projections/blob/1d5a4d97b9e63ef614c133c9e028ba8e44702c10/src/maps/Projection.java#L400-L441) | `mapObliqueLatLon()` | spherical.mjs |
+| `obliquifySphc()` | [src/maps/Projection.java](https://github.com/jkunimune15/Map-Projections/blob/1d5a4d97b9e63ef614c133c9e028ba8e44702c10/src/maps/Projection.java#L400-L441) | `Pole.mapObliqueLatLon()` | spherical.mjs |
 
 I also included the minified [Complex.js](https://github.com/infusion/Complex.js/) JavaScript library, to implement the complex math in Justin’s code.
 

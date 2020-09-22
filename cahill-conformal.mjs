@@ -4,7 +4,7 @@
 
 import { HALF_ROOT_3, QUARTER_PI, PI_OVER_6 } from './math.mjs';
 import { Point, LatLon } from './data-types.mjs';
-import { Pole, mapObliqueLatLon } from './spherical.mjs';
+import { Pole } from './spherical.mjs';
 
 // ------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ export function projectInOctant(latLon) {
   latLon.lon = negate * latLon.lon;
 
   // Get coordinates of latLon as seen from the VERTEX pole
-  const oblique = mapObliqueLatLon(latLon, VERTEX);
+  const oblique = VERTEX.mapObliqueLatLon(latLon);
 
   // Select original latLon or oblique latLon depending on which is closer
   // to the north or VERTEX poles
