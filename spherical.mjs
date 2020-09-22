@@ -2,8 +2,8 @@
 // BASIC SPHERICAL MATH FUNCTIONS
 // ------------------------------------------------------------------
 
-import { TWO_PI, HALF_PI } from './math.jsm';
-import { LatLon } from './data-types.jsm';
+import { TWO_PI, HALF_PI } from './math.mjs';
+import { LatLon } from './data-types.mjs';
 
 // ------------------------------------------------------------------
 

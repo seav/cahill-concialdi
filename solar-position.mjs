@@ -7,8 +7,8 @@
 
 // ------------------------------------------------------------------
 
-import { DEGS_IN_CIRCLE, deg2Rad, rad2Deg } from './math.jsm';
-import { LatLon } from './data-types.jsm';
+import { DEGS_IN_CIRCLE, deg2Rad, rad2Deg } from './math.mjs';
+import { LatLon } from './data-types.mjs';
 
 // ------------------------------------------------------------------
 
