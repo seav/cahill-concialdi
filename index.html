@@ -74,8 +74,6 @@ svg, canvas {
 </svg>
 
 <script src="complex.min.js"></script>
-<script src="ne-boundaries.js"></script>
-<script src="ne-country-areas.js"></script>
 <script type="module">
 
 import { TWO_PI, DEGS_IN_CIRCLE, deg2Rad } from './math.jsm';
@@ -109,6 +107,11 @@ const MAX_COLOR_VALUE = 255;
 
 // Tilt of the earth's poles in degrees; used to draw the tropic and polar circles
 const EARTH_TILT = 23.43;
+
+// ------------------------------------------------------------------
+
+// Simple JSON fetcher
+const getJson = filename => fetch(filename).then(response => response.json());
 
 
 // ==================================================================
@@ -170,37 +173,41 @@ function convertPointListsToSvgPath(pointLists, isClosed) {
 // ------------------------------------------------------------------
 
 function drawCountries() {
-  COUNTRY_AREAS.forEach(country => {
+  getJson('ne-country-areas.json').then(countries => {
+    countries.forEach(country => {
 
-    const path = convertGeoJsonToSvgPath(country[1], true);
+      const path = convertGeoJsonToSvgPath(country[1], true);
 
-    // Compute fill color based on the country's position
-    // where the average of the country's coordinates is a proxy for position
-    const flatLonLatList = [].concat(...[].concat(...country[1]));
-    const numCoords = flatLonLatList.length;
-    const sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
-    const sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
-    let red   = MAX_COLOR_VALUE/2 * (1 + sumLat / numCoords / (DEGS_IN_CIRCLE/4));
-    let green = MAX_COLOR_VALUE/2 * (1 + sumLon / numCoords / (DEGS_IN_CIRCLE/2));
-    let blue  = MAX_COLOR_VALUE - (red + green)/2;
-    red   = Math.min(MAX_COLOR_VALUE, red   * 1.25);
-    green = Math.min(MAX_COLOR_VALUE, green * 1.25);
-    blue  = Math.min(MAX_COLOR_VALUE, blue  * 1.25);
-    let rgb = `rgb(${red},${green},${blue})`;
-    path.setAttribute('fill'  , rgb);
-    path.setAttribute('stroke', rgb);
+      // Compute fill color based on the country's position
+      // where the average of the country's coordinates is a proxy for position
+      const flatLonLatList = [].concat(...[].concat(...country[1]));
+      const numCoords = flatLonLatList.length;
+      const sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
+      const sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
+      let red   = MAX_COLOR_VALUE/2 * (1 + sumLat / numCoords / (DEGS_IN_CIRCLE/4));
+      let green = MAX_COLOR_VALUE/2 * (1 + sumLon / numCoords / (DEGS_IN_CIRCLE/2));
+      let blue  = MAX_COLOR_VALUE - (red + green)/2;
+      red   = Math.min(MAX_COLOR_VALUE, red   * 1.25);
+      green = Math.min(MAX_COLOR_VALUE, green * 1.25);
+      blue  = Math.min(MAX_COLOR_VALUE, blue  * 1.25);
+      const rgb = `rgb(${red},${green},${blue})`;
+      path.setAttribute('fill'  , rgb);
+      path.setAttribute('stroke', rgb);
 
-    fGID('countries').appendChild(path);
+      fGID('countries').appendChild(path);
+    });
   });
 }
 
 // ------------------------------------------------------------------
 
 function drawBoundaries() {
-  BOUNDARIES.forEach(boundary => {
-    let path = convertGeoJsonToSvgPath(boundary[1], false);
-    if (!boundary[0]) path.classList.add('disputed');
-    fGID('boundaries').appendChild(path);
+  getJson('ne-boundaries.json').then(boundaries => {
+    boundaries.forEach(boundary => {
+      const path = convertGeoJsonToSvgPath(boundary[1], false);
+      if (!boundary[0]) path.classList.add('disputed');
+      fGID('boundaries').appendChild(path);
+    });
   });
 }
 
@@ -595,7 +602,7 @@ class MapCell {
     const y2 = (J - L * x2) / (N + Q * x2);
 
     // Return one of the solutions added to the SW corner coordinates
-    let latLon = (0 <= x1 && x1 <= 1 && 0 <= y1 && y1 <= 1)
+    const latLon = (0 <= x1 && x1 <= 1 && 0 <= y1 && y1 <= 1)
       ? new LatLon(y1, x1)
       : new LatLon(y2, x2);
     latLon.lat += this.swLatLon.lat;
@@ -757,8 +764,8 @@ function drawRasterMapArea(area, idx) {
 // RUN THE APP
 // ------------------------------------------------------------------
 
-//initVectorMap();
-initRasterMap(NE_HYPSO_FILENAME);
+initVectorMap();
+//initRasterMap(NE_HYPSO_FILENAME);
 //initRasterMap(null, true);
 
 </script>
