@@ -79,10 +79,8 @@ svg, canvas {
 
 import { TWO_PI, DEGS_IN_CIRCLE, deg2Rad } from './math.mjs';
 import { Point, LatLon } from './data-types.mjs';
-import { MAP_VIEW_ORIGIN, MAP_WIDTH, MAP_HEIGHT,
-         MAP_TILT_DEG, MAP_TILT_COS, MAP_TILT_SIN,
+import { MAP_VIEW_ORIGIN, MAP_WIDTH, MAP_HEIGHT, MAP_TILT_DEG, MAP_TILT,
          MAP_AREAS, project } from './concialdi.mjs';
-import { getLatLonDistance } from './spherical.mjs';
 import { getSunLatLon } from './solar-position.mjs';
 
 
@@ -478,7 +476,7 @@ class MapCell {
 
         let pixelData;
         if (HasTerminator) {
-          const distance = getLatLonDistance(SunPosition, latLon.toRadians());
+          const distance = SunPosition.getDistanceTo(latLon.toRadians());
           const dayRatio =
             distance <= MIN_TERMINATOR_DISTANCE
               ? 1
@@ -635,8 +633,8 @@ class MapCell {
       : corners[1].getAngleTo(corners[2]) - corners[1].getAngleTo(corners[3]);
     if (cellWidth < 0) cellWidth += TWO_PI;
     let relLon = this.isNorthPolar
-        ? corners[2].getAngleTo(corners[0]) - corners[2].getAngleTo(point)
-        : corners[1].getAngleTo(point) - corners[1].getAngleTo(corners[3]);
+        ? +(corners[2].getAngleTo(corners[0]) - corners[2].getAngleTo(point))
+        : -(corners[1].getAngleTo(corners[3]) - corners[1].getAngleTo(point));
     if (relLon < 0) relLon += TWO_PI;
     relLon /= cellWidth;
 
@@ -742,13 +740,15 @@ function drawRasterMapArea(area, idx) {
           [lat + 1, maskedLonE],
           [lat + 1, maskedLonW],
         ]
-        // Do initial projection into map coordinates
-        .map(coords => project(new LatLon(...coords), idx))
-        // Scale and rotate into final map coordinates (in Canvas pixels)
-        .map(point => new Point(
-          RasterPpu * (point.x * MAP_TILT_COS - point.y * MAP_TILT_SIN + MAP_VIEW_ORIGIN.x),
-          RasterPpu * (point.x * MAP_TILT_SIN + point.y * MAP_TILT_COS + MAP_VIEW_ORIGIN.y),
-        ));
+        .map(coords => new LatLon(...coords))
+        // Do initial projection into map coordinates then rotate, translate,
+        // and scale into final map coordinates (in Canvas pixels)
+        .map(latLon =>
+          project(latLon, idx)
+          .rotate(MAP_TILT)
+          .translate(MAP_VIEW_ORIGIN)
+          .scale(RasterPpu)
+        );
 
       const cell = new MapCell(
         new LatLon(lat, lon),

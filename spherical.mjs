@@ -7,14 +7,12 @@ import { LatLon } from './data-types.mjs';
 
 // ------------------------------------------------------------------
 
-// Class to represent a pole; basically a LatLon object
-// with an additional orientation angle
-export class Pole {
+// Class to represent a pole; extends LatLon with an orientation angle
+export class Pole extends LatLon {
 
   constructor(lat, lon, θ) {
-    this.lat = lat;
-    this.lon = lon;
-    this.θ   = θ;
+    super(lat, lon);
+    this.θ = θ;
   }
 
   isEqualTo(otherPole) {
@@ -47,7 +45,7 @@ export function mapObliqueLatLon(latLon, pole) {
 
   const lat1 = (pole.lat === HALF_PI)
     ? latLon.lat
-    : HALF_PI - getLatLonDistance(pole, latLon);
+    : HALF_PI - pole.getDistanceTo(latLon);
 
   let lon1 = (pole.lat === HALF_PI)
     ? lon1 = δLon
@@ -71,18 +69,4 @@ export function mapObliqueLatLon(latLon, pole) {
   while (lon1 < -Math.PI) lon1 += TWO_PI;
 
   return new LatLon(lat1, lon1);
-}
-
-// ------------------------------------------------------------------
-
-// Return the distance in radians of a given LatLon object from another
-// LatLon object, both in radians
-export function getLatLonDistance(origin, destination) {
-  const cosΔLon = Math.cos(origin.lon - destination.lon);
-  return (
-    HALF_PI - Math.asin(
-      Math.sin(origin.lat) * Math.sin(destination.lat) +
-      Math.cos(origin.lat) * Math.cos(destination.lat) * cosΔLon
-    )
-  );
 }

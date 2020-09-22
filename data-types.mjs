@@ -2,12 +2,20 @@
 // PRIMITIVE DATA TYPE CLASSES
 // ------------------------------------------------------------------
 
+import { HALF_PI, deg2Rad } from './math.mjs';
+
+// ------------------------------------------------------------------
+
 // Class to represent a Cartesian 2D point
 export class Point {
 
   constructor(x, y) {
     this.x = x;
     this.y = y;
+  }
+
+  copy() {
+    return new Point(this.x, this.y);
   }
 
   isEqualTo(otherPoint) {
@@ -23,6 +31,27 @@ export class Point {
 
   getDistanceTo(otherPoint) {
     return Math.hypot(otherPoint.y - this.y, otherPoint.x - this.x);
+  }
+
+  translate(δPoint) {
+    this.x += δPoint.x;
+    this.y += δPoint.y;
+    return this;
+  }
+
+  scale(factor) {
+    this.x *= factor;
+    this.y *= factor;
+    return this;
+  }
+
+  rotate(θ) {
+    const cosΘ = Math.cos(θ);
+    const sinΘ = Math.sin(θ);
+    const original = this.copy();
+    this.x = original.x * cosΘ - original.y * sinΘ;
+    this.y = original.x * sinΘ + original.y * cosΘ;
+    return this;
   }
 
   // Returns an SVG-friendly string representation of the point and
@@ -48,6 +77,16 @@ export class LatLon {
 
   // Assuming object is in degrees, returns a new object in radians
   toRadians() {
-    return new LatLon(this.lat*Math.PI/180, this.lon*Math.PI/180);
+    return new LatLon(deg2Rad(this.lat), deg2Rad(this.lon));
+  }
+
+  // Return the distance in radians to another LatLon object assuming this
+  // object is already in radians
+  getDistanceTo(otherLatLon) {
+    const cosΔLon = Math.cos(this.lon - otherLatLon.lon);
+    return HALF_PI - Math.asin(
+      Math.sin(this.lat) * Math.sin(otherLatLon.lat) +
+      Math.cos(this.lat) * Math.cos(otherLatLon.lat) * cosΔLon
+    );
   }
 };

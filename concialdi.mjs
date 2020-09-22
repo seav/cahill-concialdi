@@ -14,8 +14,7 @@ export const MAP_VIEW_ORIGIN = new Point(142, 45.5);
 export const MAP_WIDTH       = 302;
 export const MAP_HEIGHT      = 178;
 export const MAP_TILT_DEG    = -5.4;  // Tilt of the map in degrees
-export const MAP_TILT_COS    = Math.cos(deg2Rad(MAP_TILT_DEG));
-export const MAP_TILT_SIN    = Math.sin(deg2Rad(MAP_TILT_DEG));
+export const MAP_TILT        = deg2Rad(MAP_TILT_DEG);
 
 // Constants for the origin field of the MapArea class
 const NORTH_POLE_ORIGIN   = new Point(0, 0);
@@ -85,12 +84,7 @@ class MapArea {
     if (!this.isNorth) point.x = -point.x;
 
     // Return projected coordinates with scaling
-    const cosVal = Math.cos(this.angle);
-    const sinVal = Math.sin(this.angle);
-    return new Point(
-      OCTANT_SCALE * (this.origin.x + point.x * cosVal - point.y * sinVal),
-      OCTANT_SCALE * (this.origin.y + point.x * sinVal + point.y * cosVal),
-    );
+    return point.rotate(this.angle).translate(this.origin).scale(OCTANT_SCALE);
   }
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
