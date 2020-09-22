@@ -1,8 +1,8 @@
 // ==================================================================
-// CAHILL OCTAHEDRAL PROJECTION FUNCTIONS
+// CAHILL CONFORMAL PROJECTION CODE
 // ------------------------------------------------------------------
 
-import { HALF_ROOT_3, QUARTER_PI, ONE_SIXTH_PI } from './math.jsm';
+import { HALF_ROOT_3, QUARTER_PI, PI_OVER_6 } from './math.jsm';
 import { Point, LatLon } from './data-types.jsm';
 import { Pole, mapObliqueLatLon } from './spherical.jsm';
 
@@ -67,10 +67,10 @@ export function projectInOctant(latLon) {
 // https://github.com/jkunimune15/Map-Projections/blob/
 //   f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L162-L167
 function projectConformal(c) {
-  const c1 = c.mul(new Complex({ r: 1, phi: -ONE_SIXTH_PI }));
+  const c1 = c.mul(new Complex({ r: 1, phi: -PI_OVER_6 }));
   const c2 = c1
     .add(c1.pow(7 ).div(21     ))
     .add(c1.pow(11).div(99     ))
     .add(c1.pow(13).div(1287/16));
-  return c2.div(new Complex({ r: HEXAGON_SCALE, phi: -ONE_SIXTH_PI }));
+  return c2.div(new Complex({ r: HEXAGON_SCALE, phi: -PI_OVER_6 }));
 }

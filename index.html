@@ -78,9 +78,11 @@ svg, canvas {
 <script src="ne-country-areas.js"></script>
 <script type="module">
 
-import { TWO_PI, COS_30, DEGS_IN_CIRCLE, deg2Rad } from './math.jsm';
+import { TWO_PI, DEGS_IN_CIRCLE, deg2Rad } from './math.jsm';
 import { Point, LatLon } from './data-types.jsm';
-import { projectInOctant } from './cahill-octahedral.jsm';
+import { MAP_VIEW_ORIGIN, MAP_WIDTH, MAP_HEIGHT,
+         MAP_TILT_DEG, MAP_TILT_COS, MAP_TILT_SIN,
+         MAP_AREAS, project } from './concialdi.jsm';
 import { getLatLonDistance } from './spherical.jsm';
 import { getSunLatLon } from './solar-position.jsm';
 
@@ -107,16 +109,6 @@ const MAX_COLOR_VALUE = 255;
 
 // Tilt of the earth's poles in degrees; used to draw the tropic and polar circles
 const EARTH_TILT = 23.43;
-
-// Map area parameters (default unit is SVG length unit)
-const OCTANT_SCALE    = 100;  // side length of a projected octant
-const MAP_VIEW_ORIGIN = new Point(142, 45.5);
-const MAP_WIDTH       = 302;
-const MAP_HEIGHT      = 178;
-const MAP_TILT_DEG    = -5.4;  // Tilt of the map in degrees
-const MAP_TILT        = deg2Rad(MAP_TILT_DEG);
-const MAP_TILT_COS    = Math.cos(MAP_TILT);
-const MAP_TILT_SIN    = Math.sin(MAP_TILT);
 
 
 // ==================================================================
@@ -241,7 +233,7 @@ function drawGraticule(interval = DEFAULT_INTERVAL) {
         points.push(project(new LatLon(lat, lon), idx));
       }
       if (area.swCorner.lon % 1 !== endLon % 1) {
-        // Account for the half-degree cut in MapArea 2 and 3
+        // Account for the half-degree cut along the Bering Strait
         points.push(project(new LatLon(lat, endLon), idx));
       }
       pointLists.push(points);
@@ -383,137 +375,6 @@ function drawBackground() {
     'd',
     points.map((point, idx) => (idx === 0 ? 'M' : 'L') + point.toString()).join(''),
   );
-}
-
-
-// ==================================================================
-// MAP PROJECTION CODE
-// ------------------------------------------------------------------
-
-// Class to represents a map area
-// (either the whole or a portion of an octant / octahedral face)
-class MapArea {
-
-  constructor(centerLon, swCorner, neCorner, origin, angle) {
-
-    // Longitude of the octant's center in degrees
-    this.centerLon = centerLon;
-
-    // LatLon objects representing the SW and NE corners of the map area
-    this.swCorner = swCorner;
-    this.neCorner = neCorner;
-
-    // Indicates if the octant is in the northern hemisphere
-    this.isNorth = neCorner.lat > 0;
-
-    // Point object representing the position of the projected N or S pole.
-    // Note: This does not yet take map scaling and rotation into account.
-    this.origin = origin;
-
-    // Angle in radians representing the direction of S for the N pole or N for
-    // the S pole and where 0° points down and positive degrees runs clockwise.
-    // Note 1: This does not yet take map scaling and tilt into account.
-    // Note 2: Constructor param must be in degrees.
-    this.angle = deg2Rad(angle);
-
-    // Indicates if the map area contains the antimeridian (180°)
-    this.hasAntimeridian = swCorner.lon > neCorner.lon;
-  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  // Returns true if the specified LatLon object is inside the map area
-  // Note: Assumes that the param is within the Earth
-  //       (lat: [-90°,90°]; lon: [-180°,180°])
-  contains(latLon) {
-    return (
-      this.swCorner.lat <= latLon.lat && latLon.lat <= this.neCorner.lat &&
-      (
-        this.hasAntimeridian
-          ? (this.swCorner.lon <= latLon.lon || latLon.lon <= this.neCorner.lon)
-          : (this.swCorner.lon <= latLon.lon && latLon.lon <= this.neCorner.lon)
-      )
-    );
-  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  // Returns a Point object representing the projected map coordinates of a
-  // given LatLon object in degrees, taking scaling, but not tilt, into account.
-  project(latLon) {
-
-    // Normalize input then do basic octant projection (no scaling or tilt)
-    const normalLatLon = this._getNormalizedOctantLatLon(latLon);
-    const point = projectInOctant(normalLatLon.toRadians());
-
-    // Invert x to reverse the absolute function applied in the normalization
-    if (!this.isNorth) point.x = -point.x;
-
-    // Return projected coordinates with scaling
-    const cosVal = Math.cos(this.angle);
-    const sinVal = Math.sin(this.angle);
-    return new Point(
-      OCTANT_SCALE * (this.origin.x + point.x * cosVal - point.y * sinVal),
-      OCTANT_SCALE * (this.origin.y + point.x * sinVal + point.y * cosVal),
-    );
-  }
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  // Returns a new LatLon object in degrees representing the normalized
-  // coordinates given a LatLon object in degrees, where:
-  // - latitude is the distance from the equator (regardless if N/S)
-  // - longitude is the difference from the octant's center longitude
-  _getNormalizedOctantLatLon(latLon) {
-    return new LatLon(
-      Math.abs(latLon.lat),
-      this.hasAntimeridian
-        ? (
-          (latLon.lon     < 0 ? latLon.lon     + DEGS_IN_CIRCLE : latLon.lon    ) -
-          (this.centerLon < 0 ? this.centerLon + DEGS_IN_CIRCLE : this.centerLon)
-        )
-        : latLon.lon - this.centerLon,
-    );
-  }
-}
-
-// ------------------------------------------------------------------
-
-// Constants for the origin field of the MapArea class
-const NORTH_POLE_ORIGIN   = new Point(0, 0);
-const SOUTH_POLE_B_ORIGIN = new Point(   0, 2*COS_30);
-const SOUTH_POLE_L_ORIGIN = new Point(-1.5,   COS_30);
-const SOUTH_POLE_R_ORIGIN = new Point( 1.5,   COS_30);
-
-// List of the 12 MapArea objects
-const MAP_AREAS = [
-  [-160, new LatLon(  0, -168.5), new LatLon( 90, -115  ), NORTH_POLE_ORIGIN  ,  120],
-  [ -70, new LatLon(  0, -115  ), new LatLon( 90,  -25  ), NORTH_POLE_ORIGIN  ,   60],
-  [  20, new LatLon(  0,  -25  ), new LatLon( 90,   65  ), NORTH_POLE_ORIGIN  ,    0],
-  [ 110, new LatLon(  0,   65  ), new LatLon( 90,  155  ), NORTH_POLE_ORIGIN  ,  -60],
-  [-160, new LatLon(  0,  155  ), new LatLon( 90, -168.5), NORTH_POLE_ORIGIN  , -120],
-  [-160, new LatLon(-90, -150  ), new LatLon(  0, -115  ), SOUTH_POLE_L_ORIGIN,  180],
-  [ -70, new LatLon(-90, -115  ), new LatLon(  0,  -25  ), SOUTH_POLE_L_ORIGIN, -120],
-  [  20, new LatLon(-90,  -25  ), new LatLon(-45,   15  ), SOUTH_POLE_L_ORIGIN,  -60],
-  [  20, new LatLon(-45,  -25  ), new LatLon(  0,   65  ), SOUTH_POLE_B_ORIGIN, -180],
-  [  20, new LatLon(-90,   15  ), new LatLon(-45,   65  ), SOUTH_POLE_R_ORIGIN,   60],
-  [ 110, new LatLon(-90,   65  ), new LatLon(  0,  155  ), SOUTH_POLE_R_ORIGIN,  120],
-  [-160, new LatLon(-90,  155  ), new LatLon(  0, -150  ), SOUTH_POLE_R_ORIGIN,  180],
-].map(params => new MapArea(...params));
-
-// ------------------------------------------------------------------
-
-// The entry function to project a LatLon object in degrees to its map position
-// as a Point object, not taking tilt into account.
-// If the areaIdx param is specified, it will coerce projection on that MapArea,
-// otherwise it will select the first MapArea that contains the LatLon object.
-// The areaIdx param is needed because the edges of the MapAreas overlap and may
-// project to different places on the map if the MapAreas aren't adjacent.
-function project(latLon, areaIdx = null) {
-  const area = areaIdx !== null
-    ? MAP_AREAS[areaIdx]
-    : MAP_AREAS.find(area => area.contains(latLon));
-  return area.project(latLon);
 }
 
 
