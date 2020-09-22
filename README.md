@@ -1,4 +1,4 @@
-![Cahill–Concialdi vector map preview](https://github.com/seav/cahill-concialdi/blob/master/docs/readme-vector-map.png?raw=true)
+![Cahill–Concialdi vector map preview](https://github.com/seav/cahill-concialdi/blob/main/docs/readme-vector-map.png?raw=true)
 # Cahill–Concialdi map projection
 This [small web app](https://seav.github.io/cahill-concialdi/) is a JavaScript implementation of the Cahill–Concialdi Bat map projection and which generates the map as an embedded SVG image (for vector layers) or an HTML Canvas image (for raster layers).
 
@@ -14,17 +14,17 @@ Forward projection refers to the process of transforming spherical Earth coordin
 
 For my implementation, the JavaScript source code for the core forward projection was ported from the Java implementation of the conformal Cahill projection developed by Justin Kunimune for his [Map Projections](https://github.com/jkunimune15/Map-Projections/) software. I am actually very thankful to Justin for providing an open-source implementation of the map projection because I have no access to the conformal math developed by L.P. Lee in 1976 and the math itself is way over my head. Specifically, I ported and adapted the following Java methods, which maps spherical coordinates in a single Earth octant to one of the map's octahedral faces:
 
-| Justin’s Java method | Java source file | My JavaScript function |
-|---|---|---|
-| `faceProject()` | [src/maps/Octohedral.java](https://github.com/jkunimune15/Map-Projections/blob/f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L123-L139) | `projectInOctant()` |
-| `polynomial()` | [src/maps/Octohedral.java](https://github.com/jkunimune15/Map-Projections/blob/f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L162-L167) | `projectConformal()` |
-| `obliquifySphc()` | [src/maps/Projection.java](https://github.com/jkunimune15/Map-Projections/blob/1d5a4d97b9e63ef614c133c9e028ba8e44702c10/src/maps/Projection.java#L400-L441) | `mapObliqueLatLon()` |
+| Justin’s Java method | Java source file | My JavaScript function | JavaScript source file |
+|---|---|---|---|
+| `faceProject()` | [src/maps/Octohedral.java](https://github.com/jkunimune15/Map-Projections/blob/f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L123-L139) | `projectInOctant()` | cahill-conformal.mjs |
+| `polynomial()` | [src/maps/Octohedral.java](https://github.com/jkunimune15/Map-Projections/blob/f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L162-L167) | `projectConformal()` | cahill-conformal.mjs |
+| `obliquifySphc()` | [src/maps/Projection.java](https://github.com/jkunimune15/Map-Projections/blob/1d5a4d97b9e63ef614c133c9e028ba8e44702c10/src/maps/Projection.java#L400-L441) | `mapObliqueLatLon()` | spherical.mjs |
 
 I also included the minified [Complex.js](https://github.com/infusion/Complex.js/) JavaScript library, to implement the complex math in Justin’s code.
 
 As for the rest of the projection code, that is, the process of dividing the Earth into areas and recombining the projected octahedral map faces into the resulting map, I reimplemented it by myself and it was very easy to do so once you understood how spherical coordinates are projected onto each octahedral face.
 
-![Cahill–Concialdi raster map preview](https://github.com/seav/cahill-concialdi/blob/master/docs/readme-raster-map.png?raw=true)
+![Cahill–Concialdi raster map preview](https://github.com/seav/cahill-concialdi/blob/main/docs/readme-raster-map.png?raw=true)
 ### Inverse projection
 Inverse projection refers to the process of reversing a forward projection. That is, converting back from Cartesian map coordinates to spherical Earth coordinates. This process is often needed to render raster map layers.
 
