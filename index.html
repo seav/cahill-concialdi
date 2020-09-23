@@ -388,27 +388,60 @@ function drawBackground() {
 // RASTER MAP DRAWING ROUTINES
 // ------------------------------------------------------------------
 
-const NASA_BLUE_FILENAME  = 'nasa-blue-marble-ng.jpg';
-const NASA_BLACK_FILENAME = 'nasa-black-marble.jpg';
 const NE_I_FILENAME       = 'ne-i.jpg';
 const NE_HYPSO_FILENAME   = 'ne-hypso.jpg';
+const NASA_BLUE_FILENAME  = 'nasa-blue-marble-ng.jpg';
+const NASA_BLACK_FILENAME = 'nasa-black-marble.jpg';
+
+const PIXEL_DENSITY = 2;
 
 const MIN_TERMINATOR_DISTANCE = deg2Rad(89);
 const MAX_TERMINATOR_DISTANCE = deg2Rad(92);
 
-const PIXEL_DENSITY = 2;
+const RASTER_NE_I               = Symbol('NE I');
+const RASTER_NE_HYPSO           = Symbol('NE Hypso');
+const RASTER_NASA_BLUE          = Symbol('NASA Blue');
+const RASTER_NASA_BLACK         = Symbol('NASA Black');
+const RASTER_NE_I_DAY_NIGHT     = Symbol('NE I day-night');
+const RASTER_NE_HYPSO_DAY_NIGHT = Symbol('NE Hypso day-night');
+const RASTER_NASA_DAY_NIGHT     = Symbol('NASA day-night');
+
+class RasterStyleConfig {
+  constructor(filenames, isDayNight, graticuleColor) {
+    this.filenames = filenames;
+    this.isDayNight = isDayNight;
+    this.graticuleColor = graticuleColor;
+  }
+}
+
+const RASTER_STYLES_CONFIG = {
+  [RASTER_NE_I]               : new RasterStyleConfig([NE_I_FILENAME      ], false, '#0004'),
+  [RASTER_NE_HYPSO]           : new RasterStyleConfig([NE_HYPSO_FILENAME  ], false, '#0008'),
+  [RASTER_NASA_BLUE]          : new RasterStyleConfig([NASA_BLUE_FILENAME ], false, '#fff8'),
+  [RASTER_NASA_BLACK]         : new RasterStyleConfig([NASA_BLACK_FILENAME], false, '#fff4'),
+  [RASTER_NE_I_DAY_NIGHT]     : new RasterStyleConfig([NE_I_FILENAME      ], true , '#0006'),
+  [RASTER_NE_HYPSO_DAY_NIGHT] : new RasterStyleConfig([NE_HYPSO_FILENAME  ], true , '#0003'),
+  [RASTER_NASA_DAY_NIGHT]     : new RasterStyleConfig(
+    [NASA_BLUE_FILENAME, NASA_BLACK_FILENAME],
+    true,
+    '#fff4',
+  ),
+};
+window.RASTER_STYLES_CONFIG = RASTER_STYLES_CONFIG;
 
 // ------------------------------------------------------------------
 
-let Canvas;            // Canvas HTML element
-let CanvasCtx;         // Canvas rendering context
-let CanvasData;        // Canvas image data
-let RasterPpu;         // Ratio of canvas display pixels per SVG length unit
-let SourceRasterPpd;   // Source map's pixels per degree measure; must be an integer
-let SourceRasterData;  // Source map's raw image data
+const CANVAS     = fQS('canvas');
+const CANVAS_CTX = CANVAS.getContext('2d');
 
-// Flag that indicates if a terminator should be drawn
-let HasTerminator = false;
+let CanvasData;  // Canvas image data
+let RasterPpu;   // Ratio of canvas display pixels per SVG length unit
+
+let SourceRasterPpd;   // Source map's pixels per degree measure; must be an integer
+let SourceRasterData;  // Source maps' raw image data
+
+// Flag that indicates if a day-night map should be drawn
+let IsDayNight = false;
 
 // Current position of the sun as a LatLon object in radians
 let SunPosition;
@@ -472,33 +505,32 @@ class MapCell {
           Math.floor(SourceRasterPpd * pixelOffset.y) * DEGS_IN_CIRCLE * SourceRasterPpd +
           Math.floor(SourceRasterPpd * pixelOffset.x)
         );
-        const destDataIdx = NUM_CANVAS_DATA_CHANNELS * (y * Canvas.width + x);
+        const destDataIdx = NUM_CANVAS_DATA_CHANNELS * (y * CANVAS.width + x);
 
-        let pixelData;
-        if (HasTerminator) {
+        const pixelData = [
+          SourceRasterData[0][srcDataIdx    ],
+          SourceRasterData[0][srcDataIdx + 1],
+          SourceRasterData[0][srcDataIdx + 2],
+        ];
+
+        if (IsDayNight) {
           const distance = SunPosition.getDistanceTo(latLon.toRadians());
-          const dayRatio =
+          let dayRatio =
             distance <= MIN_TERMINATOR_DISTANCE
               ? 1
               : distance >= MAX_TERMINATOR_DISTANCE
                 ? 0
                 : 1 - (distance - MIN_TERMINATOR_DISTANCE) / (MAX_TERMINATOR_DISTANCE - MIN_TERMINATOR_DISTANCE);
-          const nightOffset = NUM_CANVAS_DATA_CHANNELS * DEGS_IN_CIRCLE**2 * SourceRasterPpd**2 / 2;
-          pixelData = [
-            SourceRasterData[srcDataIdx    ] * dayRatio,
-            SourceRasterData[srcDataIdx + 1] * dayRatio,
-            SourceRasterData[srcDataIdx + 2] * dayRatio,
-          ];
-          pixelData[0] += SourceRasterData[nightOffset + srcDataIdx    ] * (1 - dayRatio);
-          pixelData[1] += SourceRasterData[nightOffset + srcDataIdx + 1] * (1 - dayRatio);
-          pixelData[2] += SourceRasterData[nightOffset + srcDataIdx + 2] * (1 - dayRatio);
-        }
-        else {
-          pixelData = [
-            SourceRasterData[srcDataIdx    ],
-            SourceRasterData[srcDataIdx + 1],
-            SourceRasterData[srcDataIdx + 2],
-          ];
+          const has2SourceImages = SourceRasterData.length === 2;
+          if (!has2SourceImages) dayRatio = (dayRatio + 1)/2;
+          pixelData[0] *= dayRatio;
+          pixelData[1] *= dayRatio;
+          pixelData[2] *= dayRatio;
+          if (has2SourceImages && dayRatio < 1) {
+            pixelData[0] += SourceRasterData[1][srcDataIdx    ] * (1 - dayRatio);
+            pixelData[1] += SourceRasterData[1][srcDataIdx + 1] * (1 - dayRatio);
+            pixelData[2] += SourceRasterData[1][srcDataIdx + 2] * (1 - dayRatio);
+          }
         }
 
         CanvasData.data[destDataIdx    ] = pixelData[0];
@@ -645,68 +677,58 @@ class MapCell {
 // ------------------------------------------------------------------
 
 function initRasterMap(filename, renderTerminator) {
-
-  Canvas = fQS('canvas');
-  Canvas.width = Canvas.clientWidth * PIXEL_DENSITY;
-  RasterPpu = Canvas.width / MAP_WIDTH;
-  Canvas.height = RasterPpu * MAP_HEIGHT;
-  CanvasCtx = Canvas.getContext('2d');
-  CanvasData = CanvasCtx.getImageData(0, 0, Canvas.width, Canvas.height);
-
-  if (renderTerminator) {
-
-    HasTerminator = true;
-
-    SunPosition = getSunLatLon().toRadians();
-
-    let numImagesLoaded = 0;
-    let daySourceImage, nightSourceImage;  // Predeclare
-
-    const renderRasterMap = function() {
-
-      SourceRasterPpd = daySourceImage.width / DEGS_IN_CIRCLE;
-      const sourceCanvas = document.createElement('canvas');
-      sourceCanvas.width = daySourceImage.width;
-      sourceCanvas.height = daySourceImage.height * 2;
-      const sourceCtx = sourceCanvas.getContext('2d')
-      sourceCtx.drawImage(daySourceImage, 0, 0);
-      sourceCtx.drawImage(nightSourceImage, 0, daySourceImage.height);
-      SourceRasterData = sourceCtx.getImageData(0, 0, daySourceImage.width, daySourceImage.height * 2).data;
-
-      MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
-      CanvasCtx.putImageData(CanvasData, 0, 0);
-    };
-
-    const onloadHandler = function() {
-      numImagesLoaded++;
-      if (numImagesLoaded === 2) renderRasterMap();
-    }
-
-    daySourceImage   = new Image();
-    nightSourceImage = new Image();
-    daySourceImage.src   = NASA_BLUE_FILENAME;
-    nightSourceImage.src = NASA_BLACK_FILENAME;
-    daySourceImage.onload   = onloadHandler;
-    nightSourceImage.onload = onloadHandler;
-  }
-  else {
-    const sourceImage = new Image();
-    sourceImage.src = filename;
-    sourceImage.onload = function() {
-
-      SourceRasterPpd = sourceImage.width / DEGS_IN_CIRCLE;
-      const sourceCanvas = document.createElement('canvas');
-      sourceCanvas.width = sourceImage.width;
-      sourceCanvas.height = sourceImage.height;
-      const sourceCtx = sourceCanvas.getContext('2d')
-      sourceCtx.drawImage(sourceImage, 0, 0);
-      SourceRasterData = sourceCtx.getImageData(0, 0, sourceImage.width, sourceImage.height).data;
-
-      MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
-      CanvasCtx.putImageData(CanvasData, 0, 0);
-    };
-  }
+  CANVAS.width = CANVAS.clientWidth * PIXEL_DENSITY;
+  RasterPpu = CANVAS.width / MAP_WIDTH;
+  CANVAS.height = RasterPpu * MAP_HEIGHT;
+  CanvasData = CANVAS_CTX.getImageData(0, 0, CANVAS.width, CANVAS.height);
 }
+
+// ------------------------------------------------------------------
+
+function drawRasterMap(style, graticuleInterval = null) {
+
+  CANVAS_CTX.clearRect(0, 0, CANVAS.width, CANVAS.height);
+
+  const styleConfig = RASTER_STYLES_CONFIG[style]
+
+  IsDayNight = styleConfig.isDayNight;
+
+  if (IsDayNight) SunPosition = getSunLatLon().toRadians();
+
+  const sourceImages = [];
+  SourceRasterData = [];
+  let numImagesLoaded = 0;
+  const onloadHandler = function() {
+
+    numImagesLoaded++;
+    if (numImagesLoaded < styleConfig.filenames.length) return;
+
+    if (!SourceRasterPpd) SourceRasterPpd = sourceImages[0].width / DEGS_IN_CIRCLE;
+
+    sourceImages.forEach(image => {
+      const sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = image.width;
+      sourceCanvas.height = image.height;
+      const sourceCtx = sourceCanvas.getContext('2d')
+      sourceCtx.drawImage(image, 0, 0);
+      SourceRasterData.push(sourceCtx.getImageData(0, 0, image.width, image.height).data);
+    });
+
+    console.log(SourceRasterData);
+    console.log(SourceRasterData.length);
+
+    MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
+    CANVAS_CTX.putImageData(CanvasData, 0, 0);
+  }
+
+  styleConfig.filenames.forEach(filename => {
+    const image = new Image();
+    image.src = filename;
+    image.onload = onloadHandler;
+    sourceImages.push(image);
+  });
+}
+window.drawRasterMap = drawRasterMap;
 
 // ------------------------------------------------------------------
 
@@ -765,9 +787,9 @@ function drawRasterMapArea(area, idx) {
 // RUN THE APP
 // ------------------------------------------------------------------
 
-initVectorMap();
-//initRasterMap(NE_HYPSO_FILENAME);
-//initRasterMap(null, true);
+//initVectorMap();
+initRasterMap();
+
 
 </script>
 </body>
