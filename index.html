@@ -65,7 +65,7 @@ svg, canvas {
   stroke-dasharray: 0.5 0.2;
 }
   </style>
-  <g id="map">
+  <g id="svg-map-wrapper">
     <path id="background" />
     <g id="graticule"></g>
     <g id="circles"></g>
@@ -117,11 +117,12 @@ const getJson = filename => fetch(filename).then(response => response.json());
 // VECTOR MAP LAYERS DRAWING ROUTINES
 // ------------------------------------------------------------------
 
-function initVectorMap() {
+fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
+fGID('svg-map-wrapper').setAttribute('transform', `rotate(${MAP_TILT_DEG})`);
 
-  fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
-  fGID('map').setAttribute('transform', `rotate(${MAP_TILT_DEG})`);
+// ------------------------------------------------------------------
 
+function drawVectorMap() {
   drawBackground();
   drawGraticule(10);
   drawSpecialCircles();
@@ -297,6 +298,8 @@ function drawSpecialCircles() {
   path.classList.add('equator');
   fGID('circles').appendChild(path);
 
+  pointLists = [];
+
   // Generate Tropic of Cancer and Arctic Circle
   [EARTH_TILT, DEGS_IN_CIRCLE/4 - EARTH_TILT].forEach(lat => {
     points = [project(new LatLon(lat, MAP_AREAS[0].swCorner.lon))];
@@ -427,13 +430,13 @@ const [
   RASTER_NE_HYPSO_DAY_NIGHT,
   RASTER_NASA_DAY_NIGHT,
 ] = [
-  [[NE_I_FILENAME                          ], false, '#0004'],
-  [[NE_HYPSO_FILENAME                      ], false, '#0008'],
-  [[NASA_BLUE_FILENAME                     ], false, '#fff8'],
-  [[NASA_BLACK_FILENAME                    ], false, '#fff4'],
-  [[NE_I_FILENAME                          ], true , '#0006'],
-  [[NE_HYPSO_FILENAME                      ], true , '#0003'],
-  [[NASA_BLUE_FILENAME, NASA_BLACK_FILENAME], true , '#fff4'],
+  [[NE_I_FILENAME                          ], false, '#0002'],
+  [[NE_HYPSO_FILENAME                      ], false, '#0002'],
+  [[NASA_BLUE_FILENAME                     ], false, '#fff3'],
+  [[NASA_BLACK_FILENAME                    ], false, '#fff3'],
+  [[NE_I_FILENAME                          ], true , '#0002'],
+  [[NE_HYPSO_FILENAME                      ], true , '#0002'],
+  [[NASA_BLUE_FILENAME, NASA_BLACK_FILENAME], true , '#fff3'],
 ].map(params => new RasterStyle(...params));
 
 // ------------------------------------------------------------------
@@ -721,6 +724,7 @@ function drawRasterMap(style, graticuleInterval = null) {
     });
 
     MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
+    if (graticuleInterval !== null) drawRasterGraticule(graticuleInterval);
     CanvasContext.putImageData(CanvasData, 0, 0);
   }
 
@@ -784,14 +788,42 @@ function drawRasterMapArea(area, idx) {
   }
 }
 
+// ------------------------------------------------------------------
+
+function drawRasterGraticule(interval) {
+
+  drawGraticule(interval);
+  drawSpecialCircles();
+
+  const mapSvg = fQS('svg');
+  const tempSvg = document.createElement('svg');
+  tempSvg.innerHTML = mapSvg.innerHTML;
+  tempSvg.setAttributeNS(SVG_NS, 'viewBox', mapSvg.getAttribute('viewBox'));
+  tempSvg.setAttribute('xmlns', SVG_NS);
+  tempSvg.setAttribute('width', Canvas.width);
+  tempSvg.setAttribute('height', Canvas.height);
+  mapSvg.style.display = 'none';
+  Array.from(tempSvg.querySelectorAll('path')).forEach(path => {
+    path.setAttribute('stroke', CurrentRasterStyle.graticuleColor);
+  });
+
+  const image = new Image();
+  image.src = 'data:image/svg+xml,' + encodeURIComponent(tempSvg.outerHTML);
+  console.log(image);
+  image.onload = function() {
+    console.log(image);
+    CanvasContext.drawImage(image, 0, 0);
+  };
+}
+
 
 // ==================================================================
 // RUN THE APP
 // ------------------------------------------------------------------
 
-//initVectorMap();
+//drawVectorMap();
 initRasterMap();
-drawRasterMap(RASTER_NE_HYPSO_DAY_NIGHT);
+drawRasterMap(RASTER_NE_I_DAY_NIGHT, 10);
 
 </script>
 </body>
