@@ -2,7 +2,7 @@
 // CAHILL CONFORMAL PROJECTION CODE
 // ------------------------------------------------------------------
 
-import { HALF_ROOT_3, QUARTER_PI, PI_OVER_6 } from './math.mjs';
+import { HALF_ROOT_3, QUARTER_PI, PI_OVER_6 } from './globals.mjs';
 import { Point, LatLon } from './data-types.mjs';
 import { Pole } from './spherical.mjs';
 

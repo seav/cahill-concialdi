@@ -2,7 +2,7 @@
 // CAHILL-CONCIALDI BAT PROJECTION CODE
 // ------------------------------------------------------------------
 
-import { PI_OVER_6, DEGS_IN_CIRCLE, deg2Rad } from './math.mjs';
+import { PI_OVER_6, DEGS_IN_CIRCLE, deg2Rad } from './globals.mjs';
 import { Point, LatLon } from './data-types.mjs';
 import { projectInOctant } from './cahill-conformal.mjs';
 

@@ -2,7 +2,7 @@
 // PRIMITIVE DATA TYPE CLASSES
 // ------------------------------------------------------------------
 
-import { HALF_PI, deg2Rad } from './math.mjs';
+import { HALF_PI, deg2Rad } from './globals.mjs';
 
 // ------------------------------------------------------------------
 
