@@ -20,7 +20,7 @@ For my implementation, the JavaScript source code for the core forward projectio
 | `polynomial()` | [src/maps/Octohedral.java](https://github.com/jkunimune15/Map-Projections/blob/f1aac1f383cf902d6fe7ba8a7e586f860bb39f43/src/maps/Octohedral.java#L162-L167) | `projectConformal()` | cahill-conformal.mjs |
 | `obliquifySphc()` | [src/maps/Projection.java](https://github.com/jkunimune15/Map-Projections/blob/1d5a4d97b9e63ef614c133c9e028ba8e44702c10/src/maps/Projection.java#L400-L441) | `Pole.mapObliqueLatLon()` | spherical.mjs |
 
-I also included the minified [Complex.js](https://github.com/infusion/Complex.js/) JavaScript library, to implement the complex math in Justin’s code.
+I also load the [Complex.js](https://github.com/infusion/Complex.js/) JavaScript library, to implement the complex math in Justin’s code.
 
 As for the rest of the projection code, that is, the process of dividing the Earth into areas and recombining the projected octahedral map faces into the resulting map, I reimplemented it by myself and it was very easy to do so once you understood how spherical coordinates are projected onto each octahedral face.
 

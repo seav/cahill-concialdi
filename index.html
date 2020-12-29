@@ -74,7 +74,7 @@ svg, canvas {
   </g>
 </svg>
 
-<script src="complex.min.js"></script>
+<script src="https://unpkg.com/complex.js@2.0.11/complex.min.js"></script>
 <script type="module">
 
 import { drawVectorMap } from './map-vector.mjs';
@@ -90,7 +90,7 @@ import {
 } from './map-raster.mjs';
 
 //drawVectorMap();
-drawRasterMap(RASTER_NASA_DAY_NIGHT);
+drawRasterMap(RASTER_NE_HYPSO_DAY_NIGHT, 5);
 
 </script>
 </body>
