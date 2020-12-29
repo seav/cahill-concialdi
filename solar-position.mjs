@@ -1,128 +1,69 @@
 // ==================================================================
-// SOLAR POSITION CALCULATION FUNCTIONS
+// SOLAR POSITION CALCULATION FUNCTION
 // ------------------------------------------------------------------
 
-// These functions have been adapted from Mike Bostock's solar calculator library
-// https://github.com/mbostock/solar-calculator
+// Adapted from the Wikipedia article "Equation of Time"
+// using the "Altenative calculation" approximation
+// https://en.wikipedia.org/w/index.php?oldid=995567376#Alternative_calculation
 
 // ------------------------------------------------------------------
 
-import { DEGS_IN_CIRCLE, deg2Rad, rad2Deg } from './globals.mjs';
+import { TWO_PI, DEGS_IN_CIRCLE, EARTH_TILT, deg2Rad, rad2Deg } from './globals.mjs';
 import { LatLon } from './data-types.mjs';
+
+// ------------------------------------------------------------------
+
+const MILLI          = 0.001;
+const SECS_PER_DAY   = 86400;
+const MS_PER_DAY     = SECS_PER_DAY / MILLI;
+const EARTH_TILT_RAD = deg2Rad(EARTH_TILT);
+
+// Mean angular velocity of Earth's revolution in radians per day
+const Ω_REV = TWO_PI / 365.2422;
+
+// Approximate difference in days between Dec solstice and Jan 1
+const Δ_SOLSTICE = 10;
+
+// Approximate difference in days between Jan 1 and Earth's perihelion
+const Δ_PERIHELION = 2;
+
+// Approximate eccentricity of the Earth's orbit
+const ECCENTRICITY = 0.0167
 
 // ------------------------------------------------------------------
 
 // Returns the current position of the sun above the earth
 // as a LatLon object in degrees
-export function getSunLatLon() {
-  const now = new Date;
-  const day = new Date(+now).setUTCHours(0, 0, 0, 0);
-  const t = epochCentury(now);
-  let x = (day - now) / 864e5 * DEGS_IN_CIRCLE - DEGS_IN_CIRCLE/2 - equationOfTime(t) / 4;
-  x %= DEGS_IN_CIRCLE;
-  if (x < 0) x += DEGS_IN_CIRCLE;
-  return new LatLon(solarDeclination(t), x);
-}
+export function getSunLatLon(date = new Date) {
 
-// ------------------------------------------------------------------
+  // Various time periods since some start point
+  const msSinceUtcMidnight = date - new Date(+date).setUTCHours(0, 0, 0, 0);
+  const msSinceUtcJan1     = date - new Date(date.getUTCFullYear() + '-01-01');
+  const daysSinceUtcJan1   = msSinceUtcJan1 / MS_PER_DAY;
 
-// Returns the fractional number of centures since the J2000.0 epoch
-// (2000-01-01T12:00:00Z) given a JS date.
-// Note: No correction is made between Terrestrial Time and UTC.
-function epochCentury(date) {
-  const epoch = Date.UTC(2000, 0, 1, 12);
-  return (date - epoch) / 315576e7;
-}
+  // Rotation of the Earth in degrees since the last UTC midnight
+  const δRot = -msSinceUtcMidnight / MS_PER_DAY * DEGS_IN_CIRCLE;
 
-// ------------------------------------------------------------------
+  // Mean revolution of the Earth in radians since the Dec solstice
+  const δRev0 = Ω_REV * (daysSinceUtcJan1 + Δ_SOLSTICE);
 
-// Returns the equation of time in minutes given t in J2000.0 centuries
-// https://en.wikipedia.org/wiki/Equation_of_time
-function equationOfTime(t) {
-  const ε = obliquityOfEcliptic(t);
-  const l0 = meanLongitude(t);
-  const e = orbitEccentricity(t);
-  const m = meanAnomaly(t);
-  const y = Math.tan(ε/2)**2;
-  const sinM = Math.sin(m);
-  const eot0 =
-    y * Math.sin(2*l0)
-    - 2 * e * sinM
-    + 4 * e * y * sinM * Math.cos(2*l0)
-    - 0.5 * y * y * Math.sin(4*l0)
-    - 1.25 * e * e * Math.sin(2*m);
-  return rad2Deg(eot0) * 4;
-}
+  // Adjusted revolution of the Earth in radians since the Dec solstice
+  // using a 1st-order approximation for the orbital eccentricity
+  const δRev1 = δRev0 + 2 * ECCENTRICITY * Math.sin(Ω_REV * (daysSinceUtcJan1 - Δ_PERIHELION));
 
-// ------------------------------------------------------------------
+  // Uncorrected equation of time in half-turns
+  const eot0 = (δRev0 - Math.atan(Math.tan(δRev1) / Math.cos(EARTH_TILT_RAD))) / Math.PI;
 
-// Returns Earth's orbital eccentricity given t in J2000.0 centuries
-// https://en.wikipedia.org/wiki/Orbital_eccentricity
-function orbitEccentricity(t) {
-  return 0.016708634 - t * (0.000042037 + 0.0000001267 * t);
-}
+  // Corrected equation of time in degrees
+  const eot = (eot0 - Math.round(eot0)) * DEGS_IN_CIRCLE / 2;
 
-// ------------------------------------------------------------------
+  // Solar declination in degrees
+  const dec = -rad2Deg(Math.asin(Math.sin(EARTH_TILT_RAD) * Math.cos(δRev1)));
 
-// Returns the solar declination in degrees given t in J2000.0 centuries
-// https://en.wikipedia.org/wiki/Position_of_the_Sun#Declination_of_the_Sun_as_seen_from_Earth
-function solarDeclination(t) {
-  return rad2Deg(Math.asin(Math.sin(obliquityOfEcliptic(t)) * Math.sin(apparentLongitude(t))));
-}
+  // Solar longitude in degrees
+  let lon = δRot - eot - DEGS_IN_CIRCLE / 2;
+  lon %= DEGS_IN_CIRCLE;
+  if (lon < 0) lon += DEGS_IN_CIRCLE;
 
-// ------------------------------------------------------------------
-
-// Returns the sun's apparent longitude in radians given t in J2000.0 centuries
-// https://en.wikipedia.org/wiki/Apparent_longitude
-function apparentLongitude(t) {
-  const θ = deg2Rad(125.04 - 1934.136 * t);
-  return trueLongitude(t) + deg2Rad(-0.00569 - 0.00478 * Math.sin(θ));
-}
-
-// ------------------------------------------------------------------
-
-// Returns the sun's true longitude in radians given t in J2000.0 centuries
-// https://en.wikipedia.org/wiki/True_longitude
-function trueLongitude(t) {
-  return meanLongitude(t) + equationOfCenter(t);
-}
-
-// ------------------------------------------------------------------
-
-// Returns the sun's mean longitude in radians given t in J2000.0 centuries
-// https://en.wikipedia.org/wiki/Mean_longitude
-function meanLongitude(t) {
-  const l = (280.46646 + t * (36000.76983 + t * 0.0003032)) % DEGS_IN_CIRCLE;
-  return deg2Rad(l < 0 ? l + DEGS_IN_CIRCLE : l);
-}
-
-// ------------------------------------------------------------------
-
-// Returns the sun’s equation of the center in radians given t in J2000.0 centuries
-// https://en.wikipedia.org/wiki/Equation_of_the_center
-function equationOfCenter(t) {
-  const m = meanAnomaly(t);
-  return deg2Rad(
-    Math.sin(  m) * (1.914602 - t * (0.004817 + 0.000014 * t)) +
-    Math.sin(2*m) * (0.019993 - 0.000101 * t) +
-    Math.sin(3*m) * 0.000289
-  );
-}
-
-// ------------------------------------------------------------------
-
-// Returns the obliquity of the Earth's ecliptic in radians
-// given t in J2000.0 centuries
-function obliquityOfEcliptic(t) {
-  const ε0 = 23 + (26 + (21.448 - t * (46.815 + t * (0.00059 - t*0.001813)))/60)/60;
-  const ω = deg2Rad(125.04 - 1934.136 * t);
-  return deg2Rad(ε0 + 0.00256 * Math.cos(ω));
-}
-
-// ------------------------------------------------------------------
-
-// Returns the sun's mean anomaly in radians given t in J2000.0 centuries
-// https://en.wikipedia.org/wiki/Mean_anomaly
-function meanAnomaly(t) {
-  return deg2Rad(357.52911 + t * (35999.05029 - 0.0001537 * t));
+  return new LatLon(dec, lon);
 }
