@@ -44,7 +44,7 @@ export function projectInOctant(latLon) {
   // Apply the conformal projection
   const w = new Complex({
     r   : Math.pow(Math.tan(QUARTER_PI - latLonPrime.lat/2), 2/3),
-    phi : latLonPrime.lon * 2/3,
+    phi : latLonPrime.lon*2/3,
   });
   const z = projectConformal(w);
 

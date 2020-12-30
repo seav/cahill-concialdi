@@ -55,9 +55,13 @@ export class Point {
   }
 
   // Returns an SVG-friendly string representation of the point and
-  // rounded to at most 2 decimal points
-  toString() {
-    return (`${this.x.toFixed(2)},${this.y.toFixed(2)}`).replace(/\.00/g, '');
+  // rounded to at most numPlaces decimal points
+  toString(numPlaces = 2) {
+    return (
+      `${this.x.toFixed(numPlaces)},${this.y.toFixed(numPlaces)}`
+        .replace(/\.0+\b/g, '')
+        .replace(/(\.[0-9]*[1-9]+)0+\b/g, '$1')
+    );
   }
 }
 

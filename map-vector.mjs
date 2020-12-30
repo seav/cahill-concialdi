@@ -35,7 +35,8 @@ export function drawVectorMap() {
 
 // Convert GeoJSON LineString or MultiPolygon coordinates to an SVG path,
 // doing projection along the way
-function convertGeoJsonToSvgPath(geoJson, isMultiPolygon) {
+function convertGeoJsonToSvgPath(geoJson) {
+  const isMultiPolygon = typeof geoJson[0][0] !== 'number';
   const path = fCSVGE('path');
   const lineStrings = isMultiPolygon ? [].concat(...geoJson) : [geoJson];
   path.setAttribute(
@@ -43,10 +44,8 @@ function convertGeoJsonToSvgPath(geoJson, isMultiPolygon) {
     lineStrings
       .map(lineString =>
         lineString
-          .map((lonLat, idx) =>
-            (idx === 0 ? 'M' : 'L') +
-            project(new LatLon(...[...lonLat].reverse())).toString()
-          )
+          .map(lonLat => project(new LatLon(lonLat[1], lonLat[0])))
+          .map((point, idx) => (idx ? 'L' : 'M') + point.toString())
           .join('') + (isMultiPolygon ? 'z' : '')
       )
       .join(''),
@@ -63,7 +62,7 @@ function convertPointListsToSvgPath(pointLists, isClosed) {
     'd',
     pointLists
       .map(list =>
-        list.map((point, idx) => (idx === 0 ? 'M' : 'L') + point.toString()).join('') +
+        list.map((point, idx) => (idx ? 'L' : 'M') + point.toString()).join('') +
         (isClosed ? 'z' : '')
       )
       .join(''),
@@ -77,7 +76,7 @@ function drawCountries() {
   getJson('ne-country-areas.json').then(countries => {
     countries.forEach(country => {
 
-      const path = convertGeoJsonToSvgPath(country[1], true);
+      const path = convertGeoJsonToSvgPath(country[1]);
 
       // Compute fill color based on the country's position
       // where the average of the country's coordinates is a proxy for position
@@ -88,9 +87,9 @@ function drawCountries() {
       let red   = MAX_COLOR_VALUE/2 * (1 + sumLat / numCoords / (DEGS_IN_CIRCLE/4));
       let green = MAX_COLOR_VALUE/2 * (1 + sumLon / numCoords / (DEGS_IN_CIRCLE/2));
       let blue  = MAX_COLOR_VALUE - (red + green)/2;
-      red   = Math.min(MAX_COLOR_VALUE, red   * 1.25);
-      green = Math.min(MAX_COLOR_VALUE, green * 1.25);
-      blue  = Math.min(MAX_COLOR_VALUE, blue  * 1.25);
+      red   = Math.min(MAX_COLOR_VALUE, red  *1.25);
+      green = Math.min(MAX_COLOR_VALUE, green*1.25);
+      blue  = Math.min(MAX_COLOR_VALUE, blue *1.25);
       const rgb = `rgb(${red},${green},${blue})`;
       path.setAttribute('fill'  , rgb);
       path.setAttribute('stroke', rgb);
@@ -105,7 +104,7 @@ function drawCountries() {
 function drawBoundaries() {
   getJson('ne-boundaries.json').then(boundaries => {
     boundaries.forEach(boundary => {
-      const path = convertGeoJsonToSvgPath(boundary[1], false);
+      const path = convertGeoJsonToSvgPath(boundary[1]);
       if (!boundary[0]) path.classList.add('disputed');
       fGID('boundaries').appendChild(path);
     });
@@ -283,6 +282,6 @@ function drawBackground() {
   // Draw background
   fGID('background').setAttribute(
     'd',
-    points.map((point, idx) => (idx === 0 ? 'M' : 'L') + point.toString()).join(''),
+    points.map((point, idx) => (idx ? 'L' : 'M') + point.toString()).join(''),
   );
 }

@@ -109,20 +109,29 @@ class MapArea {
 // ------------------------------------------------------------------
 
 // List of the 12 MapArea objects
-export const MAP_AREAS = [
-  [-160, new LatLon(  0, -168.5), new LatLon( 90, -115  ), NORTH_POLE_ORIGIN  ,  120],
-  [ -70, new LatLon(  0, -115  ), new LatLon( 90,  -25  ), NORTH_POLE_ORIGIN  ,   60],
-  [  20, new LatLon(  0,  -25  ), new LatLon( 90,   65  ), NORTH_POLE_ORIGIN  ,    0],
-  [ 110, new LatLon(  0,   65  ), new LatLon( 90,  155  ), NORTH_POLE_ORIGIN  ,  -60],
-  [-160, new LatLon(  0,  155  ), new LatLon( 90, -168.5), NORTH_POLE_ORIGIN  , -120],
-  [-160, new LatLon(-90, -150  ), new LatLon(  0, -115  ), SOUTH_POLE_L_ORIGIN,  180],
-  [ -70, new LatLon(-90, -115  ), new LatLon(  0,  -25  ), SOUTH_POLE_L_ORIGIN, -120],
-  [  20, new LatLon(-90,  -25  ), new LatLon(-45,   15  ), SOUTH_POLE_L_ORIGIN,  -60],
-  [  20, new LatLon(-45,  -25  ), new LatLon(  0,   65  ), SOUTH_POLE_B_ORIGIN, -180],
-  [  20, new LatLon(-90,   15  ), new LatLon(-45,   65  ), SOUTH_POLE_R_ORIGIN,   60],
-  [ 110, new LatLon(-90,   65  ), new LatLon(  0,  155  ), SOUTH_POLE_R_ORIGIN,  120],
-  [-160, new LatLon(-90,  155  ), new LatLon(  0, -150  ), SOUTH_POLE_R_ORIGIN,  180],
-].map(params => new MapArea(...params));
+export const MAP_AREAS =
+  [
+    [-160,   0, -168.5,  90, -115  , NORTH_POLE_ORIGIN  ,  120],
+    [ -70,   0, -115  ,  90,  -25  , NORTH_POLE_ORIGIN  ,   60],
+    [  20,   0,  -25  ,  90,   65  , NORTH_POLE_ORIGIN  ,    0],
+    [ 110,   0,   65  ,  90,  155  , NORTH_POLE_ORIGIN  ,  -60],
+    [-160,   0,  155  ,  90, -168.5, NORTH_POLE_ORIGIN  , -120],
+    [-160, -90, -150  ,   0, -115  , SOUTH_POLE_L_ORIGIN,  180],
+    [ -70, -90, -115  ,   0,  -25  , SOUTH_POLE_L_ORIGIN, -120],
+    [  20, -90,  -25  , -45,   15  , SOUTH_POLE_L_ORIGIN,  -60],
+    [  20, -45,  -25  ,   0,   65  , SOUTH_POLE_B_ORIGIN, -180],
+    [  20, -90,   15  , -45,   65  , SOUTH_POLE_R_ORIGIN,   60],
+    [ 110, -90,   65  ,   0,  155  , SOUTH_POLE_R_ORIGIN,  120],
+    [-160, -90,  155  ,   0, -150  , SOUTH_POLE_R_ORIGIN,  180],
+  ]
+  .map(inputs => [
+    inputs[0],                         // centerLon
+    new LatLon(inputs[1], inputs[2]),  // swCorner
+    new LatLon(inputs[3], inputs[4]),  // neCorner
+    inputs[5],                         // origin
+    inputs[6],                         // angle
+  ])
+  .map(params => new MapArea(...params));
 
 // ------------------------------------------------------------------
 

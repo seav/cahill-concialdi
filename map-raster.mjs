@@ -264,8 +264,9 @@ class MapCell {
     const c = J*P - N*K;
 
     // Determine 2 solutions to the quadratic equation
-    const x1 = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
-    const x2 = (-b - Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+    const discriminantRoot = Math.sqrt(b*b - 4*a*c);
+    const x1 = (-b + discriminantRoot) / (2*a);
+    const x2 = (-b - discriminantRoot) / (2*a);
     const y1 = (J - L * x1) / (N + Q * x1);
     const y2 = (J - L * x2) / (N + Q * x2);
 
@@ -440,7 +441,6 @@ function drawRasterGraticule(interval) {
   const image = new Image();
   image.src = 'data:image/svg+xml,' + encodeURIComponent(tempSvg.outerHTML);
   image.onload = function() {
-    console.log(image);
     CanvasContext.drawImage(image, 0, 0);
   };
 }

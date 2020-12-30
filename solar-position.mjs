@@ -19,7 +19,7 @@ const MS_PER_DAY     = SECS_PER_DAY / MILLI;
 const EARTH_TILT_RAD = deg2Rad(EARTH_TILT);
 
 // Mean angular velocity of Earth's revolution in radians per day
-const Ω_REV = TWO_PI / 365.2422;
+const Ω_REV = TWO_PI/365.2422;
 
 // Approximate difference in days between Dec solstice and Jan 1
 const Δ_SOLSTICE = 10;
@@ -55,13 +55,13 @@ export function getSunLatLon(date = new Date) {
   const eot0 = (δRev0 - Math.atan(Math.tan(δRev1) / Math.cos(EARTH_TILT_RAD))) / Math.PI;
 
   // Corrected equation of time in degrees
-  const eot = (eot0 - Math.round(eot0)) * DEGS_IN_CIRCLE / 2;
+  const eot = (eot0 - Math.round(eot0)) * DEGS_IN_CIRCLE/2;
 
   // Solar declination in degrees
   const dec = -rad2Deg(Math.asin(Math.sin(EARTH_TILT_RAD) * Math.cos(δRev1)));
 
   // Solar longitude in degrees
-  let lon = δRot - eot - DEGS_IN_CIRCLE / 2;
+  let lon = δRot - eot - DEGS_IN_CIRCLE/2;
   lon %= DEGS_IN_CIRCLE;
   if (lon < 0) lon += DEGS_IN_CIRCLE;
 
