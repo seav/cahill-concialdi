@@ -90,7 +90,44 @@ import {
 } from './map-raster.mjs';
 
 //drawVectorMap();
-drawRasterMap(RASTER_NE_HYPSO_DAY_NIGHT, 5);
+
+const ZOOM = 3;
+const TILE_WIDTH = 256;
+const FULL_WIDTH = TILE_WIDTH * (2**ZOOM);
+
+const tiles = [];
+const sourceCanvas = document.createElement('canvas');
+sourceCanvas.width = FULL_WIDTH;
+sourceCanvas.height = FULL_WIDTH;
+const sourceContext = sourceCanvas.getContext('2d')
+
+let numImagesLoaded = 0;
+
+const onloadHandler = function() {
+
+  numImagesLoaded++;
+  if (numImagesLoaded < (2**ZOOM)**2) return;
+
+  for (let x = 0; x < 2**ZOOM; x++) {
+    for (let y = 0; y < 2**ZOOM; y++) {
+      sourceContext.drawImage(tiles[x][y], x * TILE_WIDTH, y * TILE_WIDTH);
+    }
+  }
+  drawRasterMap(sourceContext.getImageData(0, 0, FULL_WIDTH, FULL_WIDTH).data);
+}
+
+for (let x = 0; x < 2**ZOOM; x++) {
+  tiles[x] = [];
+  for (let y = 0; y < 2**ZOOM; y++) {
+    const image = new Image();
+    //image.src = `https://tile.openstreetmap.org/${ZOOM}/${x}/${y}.png`;
+    image.src = `http://tile.stamen.com/watercolor/${ZOOM}/${x}/${y}.jpg`;
+    //image.src = `https://tileserver.memomaps.de/tilegen/${ZOOM}/${x}/${y}.png`
+    image.crossOrigin = 'anonymous';
+    image.onload = onloadHandler;
+    tiles[x][y] = image;
+  }
+}
 
 </script>
 </body>

@@ -2,7 +2,7 @@
 // RASTER MAP DRAWING ROUTINES
 // ------------------------------------------------------------------
 
-import { fQS, MAX_COLOR_VALUE, TWO_PI, DEGS_IN_CIRCLE, deg2Rad, SVG_NS } from './globals.mjs';
+import { fQS, MAX_COLOR_VALUE, TWO_PI, QUARTER_PI, DEGS_IN_CIRCLE, deg2Rad, SVG_NS } from './globals.mjs';
 import { Point, LatLon } from './data-types.mjs';
 import { MAP_VIEW_ORIGIN, MAP_WIDTH, MAP_HEIGHT, MAP_TILT,
          MAP_AREAS, project } from './concialdi.mjs';
@@ -83,6 +83,8 @@ let SourceRasterRawData;
 // Current position of the sun as a LatLon object in radians
 let SunPosition;
 
+let IsFirst = true;
+
 // ------------------------------------------------------------------
 
 // Class to represent a 1°×1° cell of the raster map
@@ -124,6 +126,10 @@ class MapCell {
     const minY = Math.floor(Math.min(...ys));
     const maxY = Math.ceil (Math.max(...ys));
 
+    const ZOOM = 3;
+    const TILE_WIDTH = 256;
+    const FULL_WIDTH = TILE_WIDTH * (2**ZOOM);
+
     for   (let x = minX; x <= maxX; x++) {
       for (let y = minY; y <= maxY; y++) {
 
@@ -135,40 +141,45 @@ class MapCell {
           ? this.getPolarInverseLatLon(pixelPos)
           : this.getInverseLatLon     (pixelPos);
         const pixelOffset = new Point(
-          (latLon.lon + DEGS_IN_CIRCLE/2) % DEGS_IN_CIRCLE,
-          DEGS_IN_CIRCLE/4 - latLon.lat,
+          Math.floor(FULL_WIDTH * ((latLon.lon + DEGS_IN_CIRCLE/2) % DEGS_IN_CIRCLE) / DEGS_IN_CIRCLE),
+          Math.floor(FULL_WIDTH * (Math.PI - Math.log(Math.tan(QUARTER_PI + latLon.toRadians().lat/2))) / TWO_PI),
         );
+        const clampedY = Math.min(Math.max(pixelOffset.y, 0), FULL_WIDTH - 1);
         const srcDataIdx = NUM_CANVAS_DATA_CHANNELS * (
-          Math.floor(SOURCE_RASTER_PPD * pixelOffset.y) * DEGS_IN_CIRCLE * SOURCE_RASTER_PPD +
-          Math.floor(SOURCE_RASTER_PPD * pixelOffset.x)
+          clampedY * FULL_WIDTH + pixelOffset.x
         );
         const destDataIdx = NUM_CANVAS_DATA_CHANNELS * (y * Canvas.width + x);
 
         const pixelData = [
-          SourceRasterRawData[0][srcDataIdx    ],
-          SourceRasterRawData[0][srcDataIdx + 1],
-          SourceRasterRawData[0][srcDataIdx + 2],
+          SourceRasterRawData[srcDataIdx    ],
+          SourceRasterRawData[srcDataIdx + 1],
+          SourceRasterRawData[srcDataIdx + 2],
         ];
 
-        if (CurrentRasterStyle.isDayNight) {
-          const distance = SunPosition.getDistanceTo(latLon.toRadians());
-          let dayRatio =
-            distance <= MIN_TERMINATOR_DISTANCE
-              ? 1
-              : distance >= MAX_TERMINATOR_DISTANCE
-                ? 0
-                : 1 - (distance - MIN_TERMINATOR_DISTANCE) / (MAX_TERMINATOR_DISTANCE - MIN_TERMINATOR_DISTANCE);
-          const has2SourceImages = SourceRasterRawData.length === 2;
-          if (!has2SourceImages) dayRatio = (dayRatio + 1)/2;
-          pixelData[0] *= dayRatio;
-          pixelData[1] *= dayRatio;
-          pixelData[2] *= dayRatio;
-          if (has2SourceImages && dayRatio < 1) {
-            pixelData[0] += SourceRasterRawData[1][srcDataIdx    ] * (1 - dayRatio);
-            pixelData[1] += SourceRasterRawData[1][srcDataIdx + 1] * (1 - dayRatio);
-            pixelData[2] += SourceRasterRawData[1][srcDataIdx + 2] * (1 - dayRatio);
-          }
+        if (IsFirst) {
+          IsFirst = false;
+          console.log(pixelOffset, srcDataIdx);
         }
+
+        // if (CurrentRasterStyle.isDayNight) {
+        //   const distance = SunPosition.getDistanceTo(latLon.toRadians());
+        //   let dayRatio =
+        //     distance <= MIN_TERMINATOR_DISTANCE
+        //       ? 1
+        //       : distance >= MAX_TERMINATOR_DISTANCE
+        //         ? 0
+        //         : 1 - (distance - MIN_TERMINATOR_DISTANCE) / (MAX_TERMINATOR_DISTANCE - MIN_TERMINATOR_DISTANCE);
+        //   const has2SourceImages = SourceRasterRawData.length === 2;
+        //   if (!has2SourceImages) dayRatio = (dayRatio + 1)/2;
+        //   pixelData[0] *= dayRatio;
+        //   pixelData[1] *= dayRatio;
+        //   pixelData[2] *= dayRatio;
+        //   if (has2SourceImages && dayRatio < 1) {
+        //     pixelData[0] += SourceRasterRawData[1][srcDataIdx    ] * (1 - dayRatio);
+        //     pixelData[1] += SourceRasterRawData[1][srcDataIdx + 1] * (1 - dayRatio);
+        //     pixelData[2] += SourceRasterRawData[1][srcDataIdx + 2] * (1 - dayRatio);
+        //   }
+        // }
 
         CanvasData.data[destDataIdx    ] = pixelData[0];
         CanvasData.data[destDataIdx + 1] = pixelData[1];
@@ -325,45 +336,50 @@ function initRasterMap() {
 
 // ------------------------------------------------------------------
 
-export function drawRasterMap(style, graticuleInterval = null) {
+export function drawRasterMap(data, graticuleInterval = null) {
 
   initRasterMap();
 
   CanvasContext.clearRect(0, 0, Canvas.width, Canvas.height);
 
-  CurrentRasterStyle = style;
+  // CurrentRasterStyle = style;
 
-  if (style.isDayNight) SunPosition = getSunLatLon().toRadians();
+  // if (style.isDayNight) SunPosition = getSunLatLon().toRadians();
 
-  SourceRasterRawData = [];
+  SourceRasterRawData = data;
+  console.log(data);
   const images = [];
   let numImagesLoaded = 0;
 
-  const onloadHandler = function() {
+  // const onloadHandler = function() {
 
-    numImagesLoaded++;
-    if (numImagesLoaded < style.filenames.length) return;
+  //   numImagesLoaded++;
+  //   if (numImagesLoaded < style.filenames.length) return;
 
-    images.forEach(image => {
-      const sourceCanvas = document.createElement('canvas');
-      sourceCanvas.width = image.width;
-      sourceCanvas.height = image.height;
-      const sourceContext = sourceCanvas.getContext('2d')
-      sourceContext.drawImage(image, 0, 0);
-      SourceRasterRawData.push(sourceContext.getImageData(0, 0, image.width, image.height).data);
-    });
+  //   images.forEach(image => {
+  //     const sourceCanvas = document.createElement('canvas');
+  //     sourceCanvas.width = image.width;
+  //     sourceCanvas.height = image.height;
+  //     const sourceContext = sourceCanvas.getContext('2d')
+  //     sourceContext.drawImage(image, 0, 0);
+  //     SourceRasterRawData.push(sourceContext.getImageData(0, 0, image.width, image.height).data);
+  //   });
 
-    MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
-    if (graticuleInterval !== null) drawRasterGraticule(graticuleInterval);
-    CanvasContext.putImageData(CanvasData, 0, 0);
-  }
+  //   MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
+  //   if (graticuleInterval !== null) drawRasterGraticule(graticuleInterval);
+  //   CanvasContext.putImageData(CanvasData, 0, 0);
+  // }
 
-  style.filenames.forEach(filename => {
-    const image = new Image();
-    image.src = filename;
-    image.onload = onloadHandler;
-    images.push(image);
-  });
+  // style.filenames.forEach(filename => {
+  //   const image = new Image();
+  //   image.src = filename;
+  //   image.onload = onloadHandler;
+  //   images.push(image);
+  // });
+
+  MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
+  if (graticuleInterval !== null) drawRasterGraticule(graticuleInterval);
+  CanvasContext.putImageData(CanvasData, 0, 0);
 }
 
 // ------------------------------------------------------------------
