@@ -24,24 +24,32 @@ svg, canvas {
 <svg>
   <style>
 #background {
-  fill: #123;
+  <!-- fill: #123; -->
+  fill: #222;
   stroke: none;
 }
 
 #graticule {
   fill: none;
   stroke-width: 0.15;
-  stroke: #246;
+  <!-- stroke: #246; -->
+  stroke: #333;
 }
 
 #circles {
   fill: none;
   stroke-width: 0.3;
-  stroke: #357;
+  <!-- stroke: #357; -->
+  stroke: #444;
 }
 
 .polar-tropic {
   stroke-dasharray: 1 1;
+}
+
+#time-zones {
+  stroke-width: 0.1;
+  stroke-linejoin: round;
 }
 
 #countries {
@@ -69,6 +77,7 @@ svg, canvas {
     <path id="background" />
     <g id="graticule"></g>
     <g id="circles"></g>
+    <g id="time-zones"></g>
     <g id="countries"></g>
     <g id="boundaries"></g>
   </g>
@@ -89,8 +98,8 @@ import {
   RASTER_NASA_DAY_NIGHT,
 } from './map-raster.mjs';
 
-//drawVectorMap();
-drawRasterMap(RASTER_NE_HYPSO_DAY_NIGHT, 5);
+drawVectorMap();
+//drawRasterMap(RASTER_NE_HYPSO_DAY_NIGHT, 5);
 
 </script>
 </body>

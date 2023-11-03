@@ -27,8 +27,9 @@ export function drawVectorMap() {
   drawBackground();
   drawGraticule(10);
   drawSpecialCircles();
-  drawCountries();
-  drawBoundaries();
+  drawTimeZones();
+  //drawCountries();
+  //drawBoundaries();
 }
 
 // ------------------------------------------------------------------
@@ -68,6 +69,59 @@ function convertPointListsToSvgPath(pointLists, isClosed) {
       .join(''),
   );
   return path;
+}
+
+// ------------------------------------------------------------------
+
+function drawTimeZones() {
+  getJson('tz-2023b.geojson').then(zones => {
+    zones.forEach(zone => {
+
+      const path = convertGeoJsonToSvgPath(zone.geometry.coordinates);
+
+      // Compute fill color
+      let red = 0, green = 0, blue = 0;
+      const utcOffset = zone.properties.utcOffset;
+      if (utcOffset === "AQ") {
+        red   = 80;
+        green = 80;
+        blue  = 80;
+      }
+      else {
+        const [stdOffset, dstOffset] = utcOffset.split('|').map(o => parseInt(o));
+        const offset = ((dstOffset ? (stdOffset + dstOffset) / 2 : stdOffset) + 24) % 24;
+        if (0 <= offset && offset < 4) {
+          blue = MAX_COLOR_VALUE;
+          red = offset / 4 * MAX_COLOR_VALUE;
+        }
+        else if (4 <= offset && offset < 8) {
+          red = MAX_COLOR_VALUE;
+          blue = (8 - offset) / 4 * MAX_COLOR_VALUE;
+        }
+        else if (8 <= offset && offset < 12) {
+          red = MAX_COLOR_VALUE;
+          green = (offset - 8) / 4 * MAX_COLOR_VALUE
+        }
+        else if (12 <= offset && offset < 16) {
+          green = MAX_COLOR_VALUE;
+          red = (16 - offset) / 4 * MAX_COLOR_VALUE;
+        }
+        else if (16 <= offset && offset < 20) {
+          green = MAX_COLOR_VALUE;
+          blue = (offset - 16) / 4 * MAX_COLOR_VALUE;
+        }
+        else {
+          blue = MAX_COLOR_VALUE;
+          green = (24 - offset) / 4 * MAX_COLOR_VALUE;
+        }
+      }
+      const rgb = `rgb(${red},${green},${blue})`;
+      path.setAttribute('fill'  , rgb);
+      path.setAttribute('stroke', rgb);
+
+      fGID('time-zones').appendChild(path);
+    });
+  });
 }
 
 // ------------------------------------------------------------------
