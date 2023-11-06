@@ -285,3 +285,67 @@ function drawBackground() {
     points.map((point, idx) => (idx ? 'L' : 'M') + point.toString()).join(''),
   );
 }
+
+
+
+export function drawData() {
+  console.log('test');
+  [
+    ["Beijing",365,116.408,39.904,true],
+    ["Delhi",126,77.217,28.667],
+    ["Dubai",210,55.309,25.27],
+    ["Guangzhou",68,113.26,23.13,true],
+    ["Hangzhou",98,120.168,30.25,true,,true],
+    ["Hong Kong",305,114.159,22.278,,true],
+    ["Istanbul",64,28.96,41.01],
+    ["Mumbai",224,72.878,19.076],
+    ["Osaka",70,135.502,34.694],
+    ["Riyadh",65,46.71,24.65,true],
+    ["Seoul",185,126.99,37.56],
+    ["Shanghai",332,121.467,31.167],
+    ["Shenzhen",154,114.054,22.535],
+    ["Singapore",330,103.8,1.3],
+    ["Taipei",82,121.563,25.038],
+    ["Tel Aviv",86,34.78,32.08],
+    ["Tokyo",275,139.692,35.689],
+  ]
+  .sort((a, b) => a[2] - b[2])
+  .forEach(datum => {
+    const latLon = new LatLon(datum[3], datum[2]);
+    const pos = project(latLon);
+
+    const bar = fCSVGE('rect');
+    bar.setAttribute('x', pos.x - 0.3);
+    bar.setAttribute('y', pos.y);
+    bar.setAttribute('width', 0.6);
+    bar.setAttribute('height', datum[1]/20);
+    bar.setAttribute('stroke', '#000');
+    bar.setAttribute('stroke-width', 0.1);
+    bar.setAttribute('fill', '#f00');
+    bar.setAttribute('transform', `rotate(135 ${pos.x} ${pos.y})`)
+    fGID('countries').appendChild(bar);
+
+    const label = fCSVGE('text');
+    label.innerHTML = `${datum[0]}`;
+    label.setAttribute('x', pos.x + (datum[4] ? -1 : 1) + (datum[6] ? -2 : 0));
+    label.setAttribute('y', pos.y - 1.1 + (datum[5] ? 2.5 : 0));
+    label.setAttribute('text-anchor', datum[4] ? 'end' : 'start');
+    label.setAttribute('fill', '#800');
+    label.style.fontFamily = 'Ubuntu Condensed';
+    label.style.fontSize = '1.5px';
+    label.setAttribute('transform', `rotate(-45 ${pos.x} ${pos.y})`)
+    fGID('countries').appendChild(label);
+
+    const subLabel = fCSVGE('text');
+    subLabel.innerHTML = `${datum[1]}`;
+    subLabel.setAttribute('x', pos.x + (datum[4] ? -1 : 1) + (datum[6] ? -2 : 0));
+    subLabel.setAttribute('y', pos.y + (datum[5] ? 2.5 : 0));
+    subLabel.setAttribute('text-anchor', datum[4] ? 'end' : 'start');
+    subLabel.setAttribute('fill', '#000');
+    subLabel.style.fontFamily = 'Ubuntu';
+    subLabel.style.fontSize = '1px';
+    subLabel.style.fontWeight = 'bold';
+    subLabel.setAttribute('transform', `rotate(-45 ${pos.x} ${pos.y})`)
+    fGID('countries').appendChild(subLabel);
+  });
+}

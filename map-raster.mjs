@@ -6,7 +6,7 @@ import { fQS, MAX_COLOR_VALUE, TWO_PI, DEGS_IN_CIRCLE, deg2Rad, SVG_NS } from '.
 import { Point, LatLon } from './data-types.mjs';
 import { MAP_VIEW_ORIGIN, MAP_WIDTH, MAP_HEIGHT, MAP_TILT,
          MAP_AREAS, project } from './concialdi.mjs';
-import { initVectorMap, drawGraticule, drawSpecialCircles } from "./map-vector.mjs";
+import { initVectorMap, drawData } from "./map-vector.mjs";
 import { getSunLatLon } from './solar-position.mjs';
 
 // ------------------------------------------------------------------
@@ -25,7 +25,7 @@ const NASA_BLACK_FILENAME = 'nasa-black-marble.jpg';
 const SOURCE_RASTER_PPD = 10;
 
 // HiDPI factor: Canvas dimensions will be upscaled by this factor
-const CANVAS_PIXEL_DENSITY = 2;
+const CANVAS_PIXEL_DENSITY = 3;
 
 // Min-max distance of the solar terminator in radians from the solar position;
 // interval is used for terminator "blurring"
@@ -354,7 +354,8 @@ export function drawRasterMap(style, graticuleInterval = null) {
     });
 
     MAP_AREAS.forEach((area, idx) => { drawRasterMapArea(area, idx) });
-    if (graticuleInterval !== null) drawRasterGraticule(graticuleInterval);
+    //if (graticuleInterval !== null)
+    drawRasterGraticule(graticuleInterval);
     CanvasContext.putImageData(CanvasData, 0, 0);
   }
 
@@ -423,23 +424,24 @@ function drawRasterMapArea(area, idx) {
 function drawRasterGraticule(interval) {
 
   initVectorMap();
-  drawGraticule(interval);
-  drawSpecialCircles();
+  //drawGraticule(interval);
+  //drawSpecialCircles();
+  drawData();
 
-  const mapSvg = fQS('svg');
-  const tempSvg = document.createElement('svg');
-  tempSvg.innerHTML = mapSvg.innerHTML;
-  tempSvg.setAttributeNS(SVG_NS, 'viewBox', mapSvg.getAttribute('viewBox'));
-  tempSvg.setAttribute('xmlns', SVG_NS);
-  tempSvg.setAttribute('width', Canvas.width);
-  tempSvg.setAttribute('height', Canvas.height);
-  mapSvg.style.display = 'none';
-  Array.from(tempSvg.querySelectorAll('path')).forEach(path => {
-    path.setAttribute('stroke', CurrentRasterStyle.graticuleColor);
-  });
+  // const mapSvg = fQS('svg');
+  // const tempSvg = document.createElement('svg');
+  // tempSvg.innerHTML = mapSvg.innerHTML;
+  // tempSvg.setAttributeNS(SVG_NS, 'viewBox', mapSvg.getAttribute('viewBox'));
+  // tempSvg.setAttribute('xmlns', SVG_NS);
+  // tempSvg.setAttribute('width', Canvas.width);
+  // tempSvg.setAttribute('height', Canvas.height);
+  // mapSvg.style.display = 'none';
+  // Array.from(tempSvg.querySelectorAll('path')).forEach(path => {
+  //   path.setAttribute('stroke', CurrentRasterStyle.graticuleColor);
+  // });
 
   const image = new Image();
-  image.src = 'data:image/svg+xml,' + encodeURIComponent(tempSvg.outerHTML);
+  image.src = 'data:image/svg+xml,' + encodeURIComponent(fQS('svg').outerHTML);
   image.onload = function() {
     CanvasContext.drawImage(image, 0, 0);
   };
