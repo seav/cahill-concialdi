@@ -17,18 +17,19 @@ export function initVectorMap() {
   if (VectorMapIsInit) return;
   VectorMapIsInit = true;
   fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
-  fGID('svg-map-wrapper').setAttribute('transform', `rotate(${MAP_TILT_DEG})`);
+  //fGID('svg-map-wrapper').setAttribute('transform', `rotate(${MAP_TILT_DEG})`);
 }
 
 // ------------------------------------------------------------------
 
 export function drawVectorMap() {
   initVectorMap();
-  drawBackground();
-  drawGraticule(10);
-  drawSpecialCircles();
+  //drawBackground();
+  //drawGraticule(10);
+  //drawSpecialCircles();
   drawCountries();
   drawBoundaries();
+  drawBivariateLegend();
 }
 
 // ------------------------------------------------------------------
@@ -73,28 +74,57 @@ function convertPointListsToSvgPath(pointLists, isClosed) {
 // ------------------------------------------------------------------
 
 function drawCountries() {
-  getJson('ne-country-areas.json').then(countries => {
-    countries.forEach(country => {
+  getJson('africa-indices.json').then(indices => {
 
-      const path = convertGeoJsonToSvgPath(country[1]);
+    const minWpfi = 25;
+    const wpfiRange = 60;
 
-      // Compute fill color based on the country's position
-      // where the average of the country's coordinates is a proxy for position
-      const flatLonLatList = [].concat(...[].concat(...country[1]));
-      const numCoords = flatLonLatList.length;
-      const sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
-      const sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
-      let red   = MAX_COLOR_VALUE/2 * (1 + sumLat / numCoords / (DEGS_IN_CIRCLE/4));
-      let green = MAX_COLOR_VALUE/2 * (1 + sumLon / numCoords / (DEGS_IN_CIRCLE/2));
-      let blue  = MAX_COLOR_VALUE - (red + green)/2;
-      red   = Math.min(MAX_COLOR_VALUE, red  *1.25);
-      green = Math.min(MAX_COLOR_VALUE, green*1.25);
-      blue  = Math.min(MAX_COLOR_VALUE, blue *1.25);
-      const rgb = `rgb(${red},${green},${blue})`;
-      path.setAttribute('fill'  , rgb);
-      path.setAttribute('stroke', rgb);
+    const minHdi = 0.35
+    const hdiRange = 0.5;
 
-      fGID('countries').appendChild(path);
+    console.log(minWpfi, wpfiRange, minHdi, hdiRange);
+
+    getJson('ne-country-areas.json').then(countries => {
+      countries.forEach(country => {
+
+        const path = convertGeoJsonToSvgPath(country[1]);
+
+        // // Compute fill color based on the country's position
+        // // where the average of the country's coordinates is a proxy for position
+        // const flatLonLatList = [].concat(...[].concat(...country[1]));
+        // const numCoords = flatLonLatList.length;
+        // const sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
+        // const sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
+        // let red   = MAX_COLOR_VALUE/2 * (1 + sumLat / numCoords / (DEGS_IN_CIRCLE/4));
+        // let green = MAX_COLOR_VALUE/2 * (1 + sumLon / numCoords / (DEGS_IN_CIRCLE/2));
+        // let blue  = MAX_COLOR_VALUE - (red + green)/2;
+        // red   = Math.min(MAX_COLOR_VALUE, red  *1.25);
+        // green = Math.min(MAX_COLOR_VALUE, green*1.25);
+        // blue  = Math.min(MAX_COLOR_VALUE, blue *1.25);
+        //const rgb = `rgb(${red},${green},${blue})`;
+
+        if (country[0] in indices) {
+          const datum = indices[country[0]];
+          if (datum) {
+            const rgb = getBivariateColor(
+              (datum[0] - minWpfi) / wpfiRange,
+              (datum[1] - minHdi ) / hdiRange,
+            );
+
+            path.setAttribute('fill'  , rgb);
+            path.setAttribute('stroke', rgb);
+          }
+          else {
+            path.setAttribute('fill', 'url(#no-data)');
+          }
+        }
+        else {
+          path.setAttribute('fill'  , `#2c2c2c`);
+          path.setAttribute('stroke', `#2c2c2c`);
+        }
+
+        fGID('countries').appendChild(path);
+      });
     });
   });
 }
@@ -284,4 +314,68 @@ function drawBackground() {
     'd',
     points.map((point, idx) => (idx ? 'L' : 'M') + point.toString()).join(''),
   );
+}
+
+function drawBivariateLegend() {
+  const range = [0, 0.2, 0.4, 0.6, 0.8];
+  range.forEach(val1 => {
+    range.forEach(val2 => {
+      const rgb = getBivariateColor(val1, val2);
+      const box = fCSVGE('rect');
+      box.setAttribute('x', val1 * 40 + 4);
+      box.setAttribute('y', val2 * 40 + 4);
+      box.setAttribute('width' , 8);
+      box.setAttribute('height', 8);
+      box.setAttribute('fill'  , rgb);
+      box.setAttribute('stroke', rgb);
+      fGID('legend').appendChild(box);
+    })
+  })
+}
+
+function getBivariateColor(val1, val2) {
+
+  const seqseq2Colors = [
+    [[  0,  0,  0], [179,102,  0], [243,179,  0]],
+    [[ 55, 99,135], [179,179,179], [243,230,179]],
+    [[ 80,157,194], [180,211,225], [243,243,243]],
+  ];
+
+  const val1Gen = Math.min(4, Math.floor(val1 * 5));
+  const val2Gen = Math.min(4, Math.floor(val2 * 5));
+
+  function getAverageColor(rgb1, rgb2) {
+    return [0, 1, 2].map(idx => Math.floor((rgb1[idx] + rgb2[idx]) / 2));
+  }
+
+  let red, green, blue;
+  if (val1Gen % 2 === 0 && val2Gen % 2 === 0) {
+    [red, green, blue] = seqseq2Colors[val1Gen / 2][val2Gen / 2];
+  }
+  else if (val1Gen % 2 === 0) {
+    [red, green, blue] = getAverageColor(
+      seqseq2Colors[val1Gen / 2][Math.floor(val2Gen / 2)],
+      seqseq2Colors[val1Gen / 2][Math.ceil (val2Gen / 2)],
+    );
+  }
+  else if (val2Gen % 2 === 0) {
+    [red, green, blue] = getAverageColor(
+      seqseq2Colors[Math.floor(val1Gen / 2)][val2Gen / 2],
+      seqseq2Colors[Math.ceil (val1Gen / 2)][val2Gen / 2],
+    );
+  }
+  else {
+    [red, green, blue] = getAverageColor(
+      getAverageColor(
+        seqseq2Colors[Math.floor(val1Gen / 2)][Math.floor(val2Gen / 2)],
+        seqseq2Colors[Math.floor(val1Gen / 2)][Math.ceil (val2Gen / 2)],
+      ),
+      getAverageColor(
+        seqseq2Colors[Math.ceil (val1Gen / 2)][Math.floor(val2Gen / 2)],
+        seqseq2Colors[Math.ceil (val1Gen / 2)][Math.ceil (val2Gen / 2)],
+      ),
+    );
+  }
+
+  return `rgb(${red},${green},${blue})`;
 }

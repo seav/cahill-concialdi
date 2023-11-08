@@ -9,7 +9,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: #000;
+  background: #222;
 }
 
 svg, canvas {
@@ -22,6 +22,14 @@ svg, canvas {
 
 <canvas></canvas>
 <svg>
+  <defs>
+    <pattern id="no-data" x="0" y="0" width="1" height="1" patternUnits="userSpaceOnUse">
+      <rect x="0" y="0" fill="#fcc" width="1" height="1"></rect>
+      <line x2="1" y2="1" stroke-width=".5" x1="0" y1="0" stroke="#f88"></line>
+      <line x2="2" y2="1" stroke-width=".5" x1="0" y1="-1" stroke="#f88"></line>
+      <line x2="-1" y2="0" stroke-width=".5" x1="1" y1="2" stroke="#f88"></line>
+    </pattern>
+  </defs>
   <style>
 #background {
   fill: #123;
@@ -55,8 +63,8 @@ svg, canvas {
 
 #boundaries {
   fill: none;
-  stroke: #234;
-  stroke-width: 0.1;
+  stroke: #222;
+  stroke-width: 0.07;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
@@ -64,6 +72,15 @@ svg, canvas {
 #boundaries path.disputed {
   stroke-dasharray: 0.5 0.2;
 }
+
+#legend {
+  transform: rotate(225deg) scale(0.45) translateX(-145px) translateY(-225px);
+}
+
+#legend rect {
+  stroke-width: 0.03;
+}
+
   </style>
   <g id="svg-map-wrapper">
     <path id="background" />
@@ -71,6 +88,7 @@ svg, canvas {
     <g id="circles"></g>
     <g id="countries"></g>
     <g id="boundaries"></g>
+    <g id="legend"></g>
   </g>
 </svg>
 
@@ -89,8 +107,8 @@ import {
   RASTER_NASA_DAY_NIGHT,
 } from './map-raster.mjs';
 
-//drawVectorMap();
-drawRasterMap(RASTER_NE_HYPSO_DAY_NIGHT, 5);
+drawVectorMap();
+//drawRasterMap(RASTER_NE_HYPSO_DAY_NIGHT, 5);
 
 </script>
 </body>
