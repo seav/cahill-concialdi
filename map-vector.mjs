@@ -2,7 +2,8 @@
 // VECTOR MAP LAYERS DRAWING ROUTINES
 // ------------------------------------------------------------------
 
-import { fGID, fQS, fCSVGE, getJson, EARTH_TILT, MAX_COLOR_VALUE, DEGS_IN_CIRCLE } from './globals.mjs';
+import { fGID, fQS, fCSVGE, getJson,
+         EARTH_TILT, MAX_COLOR_VALUE, DEGS_IN_CIRCLE, rad2Deg } from './globals.mjs';
 import { LatLon } from './data-types.mjs';
 import { MAP_VIEW_ORIGIN, MAP_WIDTH, MAP_HEIGHT, MAP_TILT_DEG,
          MAP_AREAS, project } from './concialdi.mjs';
@@ -16,7 +17,8 @@ let VectorMapIsInit = false;
 export function initVectorMap() {
   if (VectorMapIsInit) return;
   VectorMapIsInit = true;
-  fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
+  //fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
+  fQS('svg').setAttribute('viewBox', '-10 -20 70 70');
   fGID('svg-map-wrapper').setAttribute('transform', `rotate(${MAP_TILT_DEG})`);
 }
 
@@ -24,11 +26,12 @@ export function initVectorMap() {
 
 export function drawVectorMap() {
   initVectorMap();
-  drawBackground();
-  drawGraticule(10);
-  drawSpecialCircles();
-  drawCountries();
-  drawBoundaries();
+  //drawBackground();
+  //drawGraticule(10);
+  //drawSpecialCircles();
+  //drawCountries();
+  //drawBoundaries();
+  drawLakes();
 }
 
 // ------------------------------------------------------------------
@@ -68,6 +71,33 @@ function convertPointListsToSvgPath(pointLists, isClosed) {
       .join(''),
   );
   return path;
+}
+
+// ------------------------------------------------------------------
+
+function drawLakes() {
+  getJson('north-american-lakes.geojson').then(collection => {
+    collection.features.forEach(feature => {
+      const {rank} = feature.properties;
+      const multiPolygon = feature.geometry.coordinates;
+      const path = convertGeoJsonToSvgPath(multiPolygon);
+
+      const lonLats = [].concat(...multiPolygon.map(mp => [].concat(...mp)));
+      const minLat = Math.min(...lonLats.map(ll => ll[1]));
+      const maxLat = Math.max(...lonLats.map(ll => ll[1]));
+      const minLon = Math.min(...lonLats.map(ll => ll[0]));
+      const maxLon = Math.max(...lonLats.map(ll => ll[0]));
+      const midLon = (minLon + maxLon) / 2;
+      const p1 = project(new LatLon(minLat, midLon));
+      const p2 = project(new LatLon(maxLat, midLon));
+      const deg = rad2Deg(Math.atan2(p2.y - p1.y, p2.x - p1.x));
+
+      path.setAttribute('fill'  , '#fff');
+      path.setAttribute('stroke-width', 0);
+      path.setAttribute('transform', `scale(3.15) translate(${-p1.x + (rank % 4 * 5)} ${-p1.y + Math.floor(rank / 4) * 5}) rotate(${-MAP_TILT_DEG - 90 - deg} ${p1.x} ${p1.y})`);
+      fGID('countries').appendChild(path);
+    });
+  });
 }
 
 // ------------------------------------------------------------------
