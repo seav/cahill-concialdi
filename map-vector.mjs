@@ -17,16 +17,16 @@ export function initVectorMap() {
   if (VectorMapIsInit) return;
   VectorMapIsInit = true;
   fQS('svg').setAttribute('viewBox', `${-MAP_VIEW_ORIGIN.x} ${-MAP_VIEW_ORIGIN.y} ${MAP_WIDTH} ${MAP_HEIGHT}`);
-  fGID('svg-map-wrapper').setAttribute('transform', `rotate(${MAP_TILT_DEG})`);
+  //fGID('svg-map-wrapper').setAttribute('transform', `rotate(${MAP_TILT_DEG})`);
 }
 
 // ------------------------------------------------------------------
 
 export function drawVectorMap() {
   initVectorMap();
-  drawBackground();
-  drawGraticule(10);
-  drawSpecialCircles();
+  //drawBackground();
+  //drawGraticule(10);
+  //drawSpecialCircles();
   drawCountries();
   drawBoundaries();
 }
@@ -73,28 +73,87 @@ function convertPointListsToSvgPath(pointLists, isClosed) {
 // ------------------------------------------------------------------
 
 function drawCountries() {
+
+  const erasData = {
+    ES:	1, IT: 2, PT: 2, CH: 2, AR: 3,
+    AT: 3, IE: 3, NL: 3, PL: 3, SE: 3,
+    JP: 4, MX: 4, BR: 6, FR: 6, SG: 6,
+    AU: 7, DE: 7, CA: 9, GB: 13, US: 49,
+  };
+  const magmaRgb = [
+    '#1a1a1a',
+    '#2c115f',
+    '#721f81',
+    '#b73779',
+    '#f1605d',
+    '#feb078',
+    '#fcfdbf',
+  ];
+  const legendLabels = [
+    'None 😢',
+    '1 to 2',
+    '3 to 4',
+    '5 to 7',
+    '8 to 10',
+    '11 to 15',
+    'Over 15',
+  ];
+
   getJson('ne-country-areas.json').then(countries => {
-    countries.forEach(country => {
+    countries
+    .filter(country => country[0] !== 'AQ')
+    .forEach(country => {
+      const shape = country[0] === 'SG'
+        ? fCSVGE('circle')
+        : convertGeoJsonToSvgPath(country[1]);
+      if (country[0] === 'SG') {
+        const projected = project(new LatLon(country[1][0][0][0][1], country[1][0][0][0][0]));
+        shape.setAttribute('cx', projected.x);
+        shape.setAttribute('cy', projected.y);
+        shape.setAttribute('r', 1);
+      }
+      let rgb;
+      if (country[0] in erasData) {
+        if      (erasData[country[0]] <=  2) rgb = magmaRgb[1]
+        else if (erasData[country[0]] <=  4) rgb = magmaRgb[2]
+        else if (erasData[country[0]] <=  7) rgb = magmaRgb[3]
+        else if (erasData[country[0]] <=  9) rgb = magmaRgb[4]
+        else if (erasData[country[0]] <= 13) rgb = magmaRgb[5]
+        else                                 rgb = magmaRgb[6]
+      }
+      else {
+        rgb = '#222222';
+      }
+      shape.setAttribute('fill'  , rgb);
+      shape.setAttribute('stroke', rgb);
+      fGID('countries').appendChild(shape);
+    });
 
-      const path = convertGeoJsonToSvgPath(country[1]);
+    magmaRgb.forEach((rgb, idx) => {
 
-      // Compute fill color based on the country's position
-      // where the average of the country's coordinates is a proxy for position
-      const flatLonLatList = [].concat(...[].concat(...country[1]));
-      const numCoords = flatLonLatList.length;
-      const sumLat = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[1], 0);
-      const sumLon = flatLonLatList.reduce((sum, lonLat) => sum + lonLat[0], 0);
-      let red   = MAX_COLOR_VALUE/2 * (1 + sumLat / numCoords / (DEGS_IN_CIRCLE/4));
-      let green = MAX_COLOR_VALUE/2 * (1 + sumLon / numCoords / (DEGS_IN_CIRCLE/2));
-      let blue  = MAX_COLOR_VALUE - (red + green)/2;
-      red   = Math.min(MAX_COLOR_VALUE, red  *1.25);
-      green = Math.min(MAX_COLOR_VALUE, green*1.25);
-      blue  = Math.min(MAX_COLOR_VALUE, blue *1.25);
-      const rgb = `rgb(${red},${green},${blue})`;
-      path.setAttribute('fill'  , rgb);
-      path.setAttribute('stroke', rgb);
+      const box = fCSVGE('rect');
+      Object.entries({
+        x: -115,
+        y: 83 + idx * 4.5,
+        width: 4,
+        height: 4,
+        'stroke-width': 0,
+        'fill': rgb,
+      }).forEach(entry => box.setAttribute(entry[0], entry[1]));
+      fGID('countries').appendChild(box);
 
-      fGID('countries').appendChild(path);
+      const label = fCSVGE('text');
+      label.innerHTML = legendLabels[idx];
+      Object.entries({
+        x: -108,
+        y: 86 + idx * 4.5,
+        fill: '#ccc',
+        'font-family': 'Ubuntu',
+        'font-variant': 'condensed',
+        'font-size': 3,
+        'font-weight': 900,
+      }).forEach(entry => label.setAttribute(entry[0], entry[1]));
+      fGID('countries').appendChild(label);
     });
   });
 }
