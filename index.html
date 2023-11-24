@@ -92,12 +92,12 @@ import {
 //drawVectorMap();
 
 const ZOOM = 3;
-const TILE_WIDTH = 256;
+const TILE_WIDTH = 512;
 const FULL_WIDTH = TILE_WIDTH * (2**ZOOM);
 
-const tiles = [];
+const tiles = { light: [], dark: [] };
 const sourceCanvas = document.createElement('canvas');
-sourceCanvas.width = FULL_WIDTH;
+sourceCanvas.width = FULL_WIDTH * 2;
 sourceCanvas.height = FULL_WIDTH;
 const sourceContext = sourceCanvas.getContext('2d')
 
@@ -106,26 +106,35 @@ let numImagesLoaded = 0;
 const onloadHandler = function() {
 
   numImagesLoaded++;
-  if (numImagesLoaded < (2**ZOOM)**2) return;
+  if (numImagesLoaded < (2**ZOOM)**2 * 2) return;
 
-  for (let x = 0; x < 2**ZOOM; x++) {
+  for   (let x = 0; x < 2**ZOOM; x++) {
     for (let y = 0; y < 2**ZOOM; y++) {
-      sourceContext.drawImage(tiles[x][y], x * TILE_WIDTH, y * TILE_WIDTH);
+      sourceContext.drawImage(tiles.light[x][y], x * TILE_WIDTH             , y * TILE_WIDTH);
+      sourceContext.drawImage(tiles.dark [x][y], x * TILE_WIDTH + FULL_WIDTH, y * TILE_WIDTH);
     }
   }
-  drawRasterMap(sourceContext.getImageData(0, 0, FULL_WIDTH, FULL_WIDTH).data);
+  drawRasterMap([
+    sourceContext.getImageData(0         , 0, FULL_WIDTH, FULL_WIDTH).data,
+    sourceContext.getImageData(FULL_WIDTH, 0, FULL_WIDTH, FULL_WIDTH).data,
+  ]);
 }
 
 for (let x = 0; x < 2**ZOOM; x++) {
-  tiles[x] = [];
+  tiles.light[x] = [];
+  tiles.dark [x] = [];
   for (let y = 0; y < 2**ZOOM; y++) {
-    const image = new Image();
-    //image.src = `https://tile.openstreetmap.org/${ZOOM}/${x}/${y}.png`;
-    image.src = `http://tile.stamen.com/watercolor/${ZOOM}/${x}/${y}.jpg`;
-    //image.src = `https://tileserver.memomaps.de/tilegen/${ZOOM}/${x}/${y}.png`
-    image.crossOrigin = 'anonymous';
-    image.onload = onloadHandler;
-    tiles[x][y] = image;
+    const imageLight = new Image();
+    imageLight.src = `https://cartodb-basemaps-a.global.ssl.fastly.net/rastertiles/voyager/${ZOOM}/${x}/${y}@2x.png`;
+    imageLight.crossOrigin = 'anonymous';
+    imageLight.onload = onloadHandler;
+    tiles.light[x][y] = imageLight;
+
+    const imageDark = new Image();
+    imageDark.src = `https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/${ZOOM}/${x}/${y}@2x.png`;
+    imageDark.crossOrigin = 'anonymous';
+    imageDark.onload = onloadHandler;
+    tiles.dark[x][y] = imageDark;
   }
 }
 

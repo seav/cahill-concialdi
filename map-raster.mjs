@@ -127,7 +127,7 @@ class MapCell {
     const maxY = Math.ceil (Math.max(...ys));
 
     const ZOOM = 3;
-    const TILE_WIDTH = 256;
+    const TILE_WIDTH = 512;
     const FULL_WIDTH = TILE_WIDTH * (2**ZOOM);
 
     for   (let x = minX; x <= maxX; x++) {
@@ -151,9 +151,9 @@ class MapCell {
         const destDataIdx = NUM_CANVAS_DATA_CHANNELS * (y * Canvas.width + x);
 
         const pixelData = [
-          SourceRasterRawData[srcDataIdx    ],
-          SourceRasterRawData[srcDataIdx + 1],
-          SourceRasterRawData[srcDataIdx + 2],
+          SourceRasterRawData[0][srcDataIdx    ],
+          SourceRasterRawData[0][srcDataIdx + 1],
+          SourceRasterRawData[0][srcDataIdx + 2],
         ];
 
         if (IsFirst) {
@@ -161,25 +161,22 @@ class MapCell {
           console.log(pixelOffset, srcDataIdx);
         }
 
-        // if (CurrentRasterStyle.isDayNight) {
-        //   const distance = SunPosition.getDistanceTo(latLon.toRadians());
-        //   let dayRatio =
-        //     distance <= MIN_TERMINATOR_DISTANCE
-        //       ? 1
-        //       : distance >= MAX_TERMINATOR_DISTANCE
-        //         ? 0
-        //         : 1 - (distance - MIN_TERMINATOR_DISTANCE) / (MAX_TERMINATOR_DISTANCE - MIN_TERMINATOR_DISTANCE);
-        //   const has2SourceImages = SourceRasterRawData.length === 2;
-        //   if (!has2SourceImages) dayRatio = (dayRatio + 1)/2;
-        //   pixelData[0] *= dayRatio;
-        //   pixelData[1] *= dayRatio;
-        //   pixelData[2] *= dayRatio;
-        //   if (has2SourceImages && dayRatio < 1) {
-        //     pixelData[0] += SourceRasterRawData[1][srcDataIdx    ] * (1 - dayRatio);
-        //     pixelData[1] += SourceRasterRawData[1][srcDataIdx + 1] * (1 - dayRatio);
-        //     pixelData[2] += SourceRasterRawData[1][srcDataIdx + 2] * (1 - dayRatio);
-        //   }
-        // }
+        const distance = SunPosition.getDistanceTo(latLon.toRadians());
+        let dayRatio =
+          distance <= MIN_TERMINATOR_DISTANCE
+            ? 1
+            : distance >= MAX_TERMINATOR_DISTANCE
+              ? 0
+              : 1 - (distance - MIN_TERMINATOR_DISTANCE) / (MAX_TERMINATOR_DISTANCE - MIN_TERMINATOR_DISTANCE);
+        const has2SourceImages = true;
+        pixelData[0] *= dayRatio;
+        pixelData[1] *= dayRatio;
+        pixelData[2] *= dayRatio;
+        if (has2SourceImages && dayRatio < 1) {
+          pixelData[0] += SourceRasterRawData[1][srcDataIdx    ] * (1 - dayRatio);
+          pixelData[1] += SourceRasterRawData[1][srcDataIdx + 1] * (1 - dayRatio);
+          pixelData[2] += SourceRasterRawData[1][srcDataIdx + 2] * (1 - dayRatio);
+        }
 
         CanvasData.data[destDataIdx    ] = pixelData[0];
         CanvasData.data[destDataIdx + 1] = pixelData[1];
@@ -342,12 +339,9 @@ export function drawRasterMap(data, graticuleInterval = null) {
 
   CanvasContext.clearRect(0, 0, Canvas.width, Canvas.height);
 
-  // CurrentRasterStyle = style;
-
-  // if (style.isDayNight) SunPosition = getSunLatLon().toRadians();
+  SunPosition = getSunLatLon().toRadians();
 
   SourceRasterRawData = data;
-  console.log(data);
   const images = [];
   let numImagesLoaded = 0;
 
