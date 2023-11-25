@@ -77,6 +77,10 @@ function drawCountries() {
     countries.forEach(country => {
 
       const path = convertGeoJsonToSvgPath(country[1]);
+      path.id = 'iso-' + country[0];
+      path.onmouseover = () => {
+        fGID('annotation').innerHTML = country[0];
+      };
 
       // Compute fill color based on the country's position
       // where the average of the country's coordinates is a proxy for position
