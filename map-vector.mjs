@@ -74,30 +74,25 @@ function convertPointListsToSvgPath(pointLists, isClosed) {
 
 function drawCountries() {
 
-  const erasData = {
-    ES:	1, IT: 2, PT: 2, CH: 2, AR: 3,
-    AT: 3, IE: 3, NL: 3, PL: 3, SE: 3,
-    JP: 4, MX: 4, BR: 6, FR: 6, SG: 6,
-    AU: 7, DE: 7, CA: 9, GB: 13, US: 49,
+  const antarcticData = {
+    AR: 10, AU: 10, AT:  1, BY:  7, BE:  8, BR:  9, BG:  8, CA:  3, CL: 10, CN:  9,
+    CO:  2, CR:  1, CU:  1, CZ:  9, DK:  1, EC:  8, EE:  1, FI:  8, FR: 10, DE:  9,
+    GR:  1, GT:  1, HU:  1, IS:  1, IN:  9, IT:  9, JP:  9, KZ:  1, MY:  2, MC:  1,
+    MN:  1, NL:  8, NZ: 10, KP:  1, NO: 10, PK:  4, PG:  1, PE:  8, PL:  9, PT:  3,
+    RO:  4, RU:  9, SM:  1, SK:  1, SI:  1, ZA:  9, KR:  9, ES:  8, SE:  8, CH:  2,
+    TR:  7, UA:  9, GB: 10, US:  9, UY:  9, VE:  2,
   };
-  const magmaRgb = [
-    '#1a1a1a',
-    '#2c115f',
-    '#721f81',
-    '#b73779',
-    '#f1605d',
-    '#feb078',
-    '#fcfdbf',
-  ];
-  const legendLabels = [
-    'None 😢',
-    '1 to 2',
-    '3 to 4',
-    '5 to 7',
-    '8 to 10',
-    '11 to 15',
-    'Over 15',
-  ];
+  const neutralRgb = '#222222';
+  const schemeRgb = {
+     1: '#d53e4f',
+     2: '#f46d43',
+     3: '#fdae61',
+     4: '#fee08b',
+     7: '#e6f598',
+     8: '#abdda4',
+     9: '#66c2a5',
+    10: '#3288bd',
+  };
 
   getJson('ne-country-areas.json').then(countries => {
     countries
@@ -113,13 +108,8 @@ function drawCountries() {
         shape.setAttribute('r', 1);
       }
       let rgb;
-      if (country[0] in erasData) {
-        if      (erasData[country[0]] <=  2) rgb = magmaRgb[1]
-        else if (erasData[country[0]] <=  4) rgb = magmaRgb[2]
-        else if (erasData[country[0]] <=  7) rgb = magmaRgb[3]
-        else if (erasData[country[0]] <=  9) rgb = magmaRgb[4]
-        else if (erasData[country[0]] <= 13) rgb = magmaRgb[5]
-        else                                 rgb = magmaRgb[6]
+      if (country[0] in antarcticData) {
+        rgb = schemeRgb[antarcticData[country[0]]];
       }
       else {
         rgb = '#222222';
@@ -129,31 +119,17 @@ function drawCountries() {
       fGID('countries').appendChild(shape);
     });
 
-    magmaRgb.forEach((rgb, idx) => {
-
+    [neutralRgb, ...Object.values(schemeRgb)].forEach((rgb, idx) => {
       const box = fCSVGE('rect');
       Object.entries({
-        x: -115,
-        y: 83 + idx * 4.5,
+        x: 137 - idx * 5,
+        y: 75,
         width: 4,
         height: 4,
         'stroke-width': 0,
         'fill': rgb,
       }).forEach(entry => box.setAttribute(entry[0], entry[1]));
       fGID('countries').appendChild(box);
-
-      const label = fCSVGE('text');
-      label.innerHTML = legendLabels[idx];
-      Object.entries({
-        x: -108,
-        y: 86 + idx * 4.5,
-        fill: '#ccc',
-        'font-family': 'Ubuntu',
-        'font-variant': 'condensed',
-        'font-size': 3,
-        'font-weight': 900,
-      }).forEach(entry => label.setAttribute(entry[0], entry[1]));
-      fGID('countries').appendChild(label);
     });
   });
 }
